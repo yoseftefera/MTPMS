@@ -1,0 +1,39 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('tenants', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name', 255);
+            $table->string('subdomain', 100)->unique();
+            $table->string('admin_email', 255);
+            $table->enum('status', ['active', 'suspended', 'deactivated'])->default('active');
+            $table->string('tenant_code', 10)->unique();
+            $table->json('settings')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+
+            // Indexes
+            $table->index('subdomain');
+            $table->index('status');
+            $table->index('tenant_code');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('tenants');
+    }
+};
