@@ -5,22 +5,19 @@ import '../entities/user.dart';
 
 /// Contract for authentication operations.
 abstract class AuthRepository {
-  /// Authenticates the user with [email] and [password].
-  ///
-  /// On success returns the authenticated [User].
-  /// On failure returns a [Failure] (e.g., [AuthFailure], [NetworkFailure]).
+  /// Authenticates with email/password and persists the JWT.
   Future<Either<Failure, User>> login({
     required String email,
     required String password,
     required String tenantId,
   });
 
-  /// Logs out the current user, invalidating the JWT on the server.
+  /// Invalidates the stored JWT and clears local credentials.
   Future<Either<Failure, void>> logout();
 
-  /// Returns the currently cached authenticated user, or null if not logged in.
-  Future<User?> getCachedUser();
+  /// Returns the currently authenticated user or null.
+  Future<Either<Failure, User?>> getCurrentUser();
 
-  /// Requests a password reset email for [email].
-  Future<Either<Failure, void>> requestPasswordReset({required String email});
+  /// Returns true when a valid access token is stored.
+  Future<bool> isAuthenticated();
 }

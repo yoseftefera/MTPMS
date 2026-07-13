@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
@@ -6,30 +7,44 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/login_usecase.dart';
+import '../../domain/usecases/logout_usecase.dart';
 
 // ---------------------------------------------------------------------------
-// Repository & use-case providers
+// Infrastructure providers
 // ---------------------------------------------------------------------------
+
+final secureStorageProvider = Provider<FlutterSecureStorage>(
+  (_) => const FlutterSecureStorage(),
+);
 
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
-  return AuthRemoteDataSourceImpl(dio: ref.watch(dioProvider));
+  return AuthRemoteDataSourceImpl(ref.watch(apiClientProvider));
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepositoryImpl(
     remoteDataSource: ref.watch(authRemoteDataSourceProvider),
+    secureStorage: ref.watch(secureStorageProvider),
   );
 });
 
-final loginUseCaseProvider = Provider<LoginUseCase>((ref) {
-  return LoginUseCase(ref.watch(authRepositoryProvider));
+// ---------------------------------------------------------------------------
+// Use-case providers
+// ---------------------------------------------------------------------------
+
+final loginUsecaseProvider = Provider<LoginUsecase>((ref) {
+  return LoginUsecase(ref.watch(authRepositoryProvider));
+});
+
+final logoutUsecaseProvider = Provider<LogoutUsecase>((ref) {
+  return LogoutUsecase(ref.watch(authRepositoryProvider));
 });
 
 // ---------------------------------------------------------------------------
-// Auth state
+// Auth state notifier
 // ---------------------------------------------------------------------------
 
-/// Represents the authentication state of the app.
+/// Possible states for the authentication flow.
 sealed class AuthState {
   const AuthState();
 }
@@ -56,27 +71,32 @@ class AuthError extends AuthState {
   const AuthError(this.message);
 }
 
-// ---------------------------------------------------------------------------
-// Auth notifier
-// ---------------------------------------------------------------------------
-
 class AuthNotifier extends StateNotifier<AuthState> {
-  final AuthRepository _repository;
-  final LoginUseCase _loginUseCase;
+  final LoginUsecase _loginUsecase;
+  final LogoutUsecase _logoutUsecase;
+  final AuthRepository _authRepository;
 
   AuthNotifier({
-    required AuthRepository repository,
-    required LoginUseCase loginUseCase,
-  })  : _repository = repository,
-        _loginUseCase = loginUseCase,
+    required LoginUsecase loginUsecase,
+    required LogoutUsecase logoutUsecase,
+    required AuthRepository authRepository,
+  })  : _loginUsecase = loginUsecase,
+        _logoutUsecase = logoutUsecase,
+        _authRepository = authRepository,
         super(const AuthInitial()) {
-    _checkCachedUser();
+    _checkAuthentication();
   }
 
-  Future<void> _checkCachedUser() async {
-    final user = await _repository.getCachedUser();
-    if (user != null) {
-      state = AuthAuthenticated(user);
+  Future<void> _checkAuthentication() async {
+    final isAuth = await _authRepository.isAuthenticated();
+    if (isAuth) {
+      final result = await _authRepository.getCurrentUser();
+      result.fold(
+        (_) => state = const AuthUnauthenticated(),
+        (user) => state = user != null
+            ? AuthAuthenticated(user)
+            : const AuthUnauthenticated(),
+      );
     } else {
       state = const AuthUnauthenticated();
     }
@@ -88,11 +108,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String tenantId,
   }) async {
     state = const AuthLoading();
-
-    final result = await _loginUseCase(
-      LoginParams(email: email, password: password, tenantId: tenantId),
+    final result = await _loginUsecase(
+      email: email,
+      password: password,
+      tenantId: tenantId,
     );
-
     result.fold(
       (failure) => state = AuthError(failure.message),
       (user) => state = AuthAuthenticated(user),
@@ -101,15 +121,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     state = const AuthLoading();
-    await _repository.logout();
+    await _logoutUsecase();
     state = const AuthUnauthenticated();
   }
 }
 
-/// Provider for [AuthNotifier].
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authNotifierProvider =
+    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(
-    repository: ref.watch(authRepositoryProvider),
-    loginUseCase: ref.watch(loginUseCaseProvider),
+    loginUsecase: ref.watch(loginUsecaseProvider),
+    logoutUsecase: ref.watch(logoutUsecaseProvider),
+    authRepository: ref.watch(authRepositoryProvider),
   );
 });

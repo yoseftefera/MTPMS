@@ -1,64 +1,37 @@
-import 'package:dio/dio.dart';
-
-import '../../../../core/errors/exceptions.dart';
+import '../../../../core/network/api_client.dart';
 import '../models/tender_model.dart';
 
 abstract class TenderRemoteDataSource {
-  Future<List<TenderModel>> getTenders({
-    int page = 1,
-    String? category,
-    String? status,
-  });
-
-  Future<TenderModel> getTenderById(String id);
+  Future<List<TenderModel>> getOpenTenders({int page = 1});
+  Future<TenderModel> getTender(String tenderId);
 }
 
 class TenderRemoteDataSourceImpl implements TenderRemoteDataSource {
-  final Dio _dio;
+  final ApiClient _client;
 
-  const TenderRemoteDataSourceImpl({required Dio dio}) : _dio = dio;
+  const TenderRemoteDataSourceImpl(this._client);
 
   @override
-  Future<List<TenderModel>> getTenders({
-    int page = 1,
-    String? category,
-    String? status,
-  }) async {
-    try {
-      final response = await _dio.get(
-        '/tenders',
-        queryParameters: {
-          'page': page,
-          if (category != null) 'category': category,
-          if (status != null) 'status': status,
-        },
-      );
-      final items = response.data['data'] as List;
-      return items
-          .map((e) => TenderModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } on DioException catch (e) {
-      throw _mapError(e);
-    }
+  Future<List<TenderModel>> getOpenTenders({int page = 1}) async {
+    final response = await _client.get(
+      '/tenders',
+      queryParameters: {
+        'status': 'published',
+        'page': page,
+        'per_page': 20,
+      },
+    );
+    final data = (response as Map<String, dynamic>)['data'] as List<dynamic>;
+    return data
+        .map((e) => TenderModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
-  Future<TenderModel> getTenderById(String id) async {
-    try {
-      final response = await _dio.get('/tenders/$id');
-      return TenderModel.fromJson(
-          response.data['data'] as Map<String, dynamic>);
-    } on DioException catch (e) {
-      throw _mapError(e);
-    }
-  }
-
-  AppException _mapError(DioException e) {
-    final code = e.response?.statusCode;
-    final msg = e.response?.data?['message'] as String? ?? e.message ?? 'Error';
-    if (code == null) return const NetworkException();
-    if (code == 401) return AuthException(message: msg);
-    if (code == 404) return const NotFoundException();
-    return ServerException(message: msg, statusCode: code);
+  Future<TenderModel> getTender(String tenderId) async {
+    final response = await _client.get('/tenders/$tenderId');
+    final data =
+        (response as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+    return TenderModel.fromJson(data);
   }
 }

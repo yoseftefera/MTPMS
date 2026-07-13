@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Purchase Orders", description="Purchase order creation, issuance, acceptance, rejection, amendment, and cancellation.")
+ *
  * PurchaseOrderController — thin controller for the PO lifecycle.
  *
  * Endpoints:
@@ -42,15 +44,24 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of purchase orders, with optional filters.
+     * @OA\Get(
+     *     path="/purchase-orders",
+     *     operationId="listPurchaseOrders",
+     *     tags={"Purchase Orders"},
+     *     summary="List purchase orders",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"draft","issued","accepted","rejected","partially_received","fully_received","cancelled","overdue"})),
+     *     @OA\Parameter(name="supplier_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="po_number", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="date_from", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="date_to", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Purchase orders list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/PurchaseOrderResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   status       — filter by status value
-     *   supplier_id  — filter by supplier UUID
-     *   date_from    — filter created_at >= date (Y-m-d)
-     *   date_to      — filter created_at <= date (Y-m-d)
-     *   po_number    — partial PO number match
-     *   per_page     — results per page (default 20, max 100)
+     * Return a paginated list of purchase orders, with optional filters.
      *
      * Requirements: 10.1
      */
@@ -80,9 +91,20 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create a new purchase order in draft status and encumber budget.
+     * @OA\Post(
+     *     path="/purchase-orders",
+     *     operationId="createPurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Create purchase order",
+     *     description="Creates PO with unique PO number in format PO-{TENANT_CODE}-{YEAR}-{SEQ} and encumbers budget.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"supplier_id","department_id","delivery_address","required_delivery_date","items"}, @OA\Property(property="supplier_id", type="string", format="uuid"), @OA\Property(property="department_id", type="string", format="uuid"), @OA\Property(property="purchase_request_id", type="string", format="uuid", nullable=true), @OA\Property(property="bid_id", type="string", format="uuid", nullable=true), @OA\Property(property="delivery_address", type="string"), @OA\Property(property="required_delivery_date", type="string", format="date"), @OA\Property(property="currency", type="string", example="USD"), @OA\Property(property="items", type="array", @OA\Items(@OA\Property(property="description", type="string"), @OA\Property(property="quantity", type="number"), @OA\Property(property="unit_of_measure", type="string"), @OA\Property(property="unit_price", type="number"))))),
+     *     @OA\Response(response=201, description="PO created.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Roles: Procurement_Officer and above.
+     * Create a new purchase order in draft status and encumber budget.
      *
      * Requirements: 10.1, 10.2
      */
@@ -107,10 +129,19 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a single purchase order with items and supplier details.
+     * @OA\Get(
+     *     path="/purchase-orders/{purchaseOrder}",
+     *     operationId="showPurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Get purchase order",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseOrder", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="PO with items and supplier.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Tenant scope enforced via route model binding — returns 404 for
-     * POs belonging to a different tenant.
+     * Return a single purchase order with items and supplier details.
      *
      * Requirements: 10.2
      */
@@ -129,11 +160,21 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Amend a purchase order.
+     * @OA\Put(
+     *     path="/purchase-orders/{purchaseOrder}",
+     *     operationId="amendPurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Amend purchase order",
+     *     description="Pre-acceptance: free amendment. Post-acceptance: sets pending supplier acknowledgment.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseOrder", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="delivery_address", type="string"), @OA\Property(property="required_delivery_date", type="string", format="date"), @OA\Property(property="items", type="array", @OA\Items(type="object")))),
+     *     @OA\Response(response=200, description="PO amended.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Cannot amend in current state.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Pre-acceptance (draft/issued): free amendment.
-     * Post-acceptance (accepted): sets pending_supplier_acknowledgment = true.
-     * Rejected/cancelled/completed: not allowed (422).
+     * Amend a purchase order.
      *
      * Requirements: 10.9
      */
@@ -160,9 +201,20 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Issue a purchase order to the supplier (draft → issued).
+     * @OA\Post(
+     *     path="/purchase-orders/{purchaseOrder}/issue",
+     *     operationId="issuePurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Issue purchase order to supplier",
+     *     description="Transitions PO from draft to issued and sends PO to supplier.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseOrder", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="PO issued.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="PO not in draft status.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Roles: Procurement_Officer and above.
+     * Issue a purchase order to the supplier (draft → issued).
      *
      * Requirements: 10.3
      */
@@ -187,9 +239,20 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Accept a purchase order (issued → accepted).
+     * @OA\Post(
+     *     path="/purchase-orders/{purchaseOrder}/accept",
+     *     operationId="acceptPurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Accept purchase order",
+     *     description="Supplier accepts the PO (issued → accepted).",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseOrder", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="PO accepted.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="PO not in issued status.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Typically called by the Supplier role (or Procurement_Officer on behalf).
+     * Accept a purchase order (issued → accepted).
      *
      * Requirements: 10.4
      */
@@ -214,9 +277,21 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Reject a purchase order (issued → rejected).
+     * @OA\Post(
+     *     path="/purchase-orders/{purchaseOrder}/reject",
+     *     operationId="rejectPurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Reject purchase order",
+     *     description="Supplier rejects the PO (issued → rejected). Releases budget encumbrance.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseOrder", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Unable to meet delivery terms."))),
+     *     @OA\Response(response=200, description="PO rejected.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="PO not in issued status.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Releases the budget encumbrance. A rejection reason is required.
+     * Reject a purchase order (issued → rejected).
      *
      * Requirements: 10.5
      */
@@ -242,10 +317,21 @@ class PurchaseOrderController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Cancel a purchase order.
+     * @OA\Post(
+     *     path="/purchase-orders/{purchaseOrder}/cancel",
+     *     operationId="cancelPurchaseOrder",
+     *     tags={"Purchase Orders"},
+     *     summary="Cancel purchase order",
+     *     description="Cancels PO from draft, issued, or accepted status. Releases budget encumbrance.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseOrder", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Procurement requirements have changed."))),
+     *     @OA\Response(response=200, description="PO cancelled.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseOrderResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Cannot cancel in current state.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Allowed from draft, issued, and accepted statuses.
-     * Releases the budget encumbrance. A cancellation reason is required.
+     * Cancel a purchase order.
      *
      * Requirements: 10.10
      */

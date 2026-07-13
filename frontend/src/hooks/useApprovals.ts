@@ -4,11 +4,17 @@
  * Hooks:
  *   usePendingApprovals      — list with 30s auto-refetch
  *   useApprovalHistory       — history for a specific document
- *   useApproveDocument       — mutation with optimistic update
- *   useRejectDocument        — mutation
- *   useReturnForRevision     — mutation
+ *   useApproveDocument       — mutation with optimistic update (removes from pending list)
+ *   useRejectDocument        — mutation with optimistic update (removes from pending list)
+ *   useReturnForRevision     — mutation with optimistic update (removes from pending list)
  *
- * Validates: Requirements 22.5, 22.7
+ * All three action mutations apply the same optimistic update pattern:
+ *   1. Cancel in-flight pending queries
+ *   2. Snapshot previous data for rollback
+ *   3. Remove the acted-upon item from the pending list immediately
+ *   4. Rollback on error, then re-validate on settle
+ *
+ * Validates: Requirements 6.3, 6.4, 6.5, 22.5, 22.7
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -110,6 +116,7 @@ export function useApproveDocument() {
 
 /**
  * Reject a document.
+ * Optimistically removes the item from the pending list (same as approve).
  */
 export function useRejectDocument() {
   const queryClient = useQueryClient();
@@ -117,7 +124,36 @@ export function useRejectDocument() {
   return useMutation({
     mutationFn: ({ approvalId, payload }: { approvalId: string; payload: RejectPayload }) =>
       rejectDocument(approvalId, payload),
-    onSuccess: () => {
+    onMutate: async ({ approvalId }) => {
+      await queryClient.cancelQueries({ queryKey: approvalQueryKeys.pending() });
+
+      const previousData = queryClient.getQueriesData<PaginatedResponse<Approval>>({
+        queryKey: approvalQueryKeys.pending(),
+      });
+
+      // Optimistically remove the rejected item from every cached pending list
+      queryClient.setQueriesData<PaginatedResponse<Approval>>(
+        { queryKey: approvalQueryKeys.pending() },
+        (old) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.filter((a) => a.id !== approvalId),
+          };
+        },
+      );
+
+      return { previousData };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback optimistic update on error
+      if (context?.previousData) {
+        for (const [queryKey, data] of context.previousData) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: approvalQueryKeys.pending() });
     },
   });
@@ -125,6 +161,7 @@ export function useRejectDocument() {
 
 /**
  * Return a document for revision.
+ * Optimistically removes the item from the pending list.
  */
 export function useReturnForRevision() {
   const queryClient = useQueryClient();
@@ -132,7 +169,36 @@ export function useReturnForRevision() {
   return useMutation({
     mutationFn: ({ approvalId, payload }: { approvalId: string; payload: ReturnPayload }) =>
       returnForRevision(approvalId, payload),
-    onSuccess: () => {
+    onMutate: async ({ approvalId }) => {
+      await queryClient.cancelQueries({ queryKey: approvalQueryKeys.pending() });
+
+      const previousData = queryClient.getQueriesData<PaginatedResponse<Approval>>({
+        queryKey: approvalQueryKeys.pending(),
+      });
+
+      // Optimistically remove the item returned for revision from every cached pending list
+      queryClient.setQueriesData<PaginatedResponse<Approval>>(
+        { queryKey: approvalQueryKeys.pending() },
+        (old) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.filter((a) => a.id !== approvalId),
+          };
+        },
+      );
+
+      return { previousData };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback optimistic update on error
+      if (context?.previousData) {
+        for (const [queryKey, data] of context.previousData) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: approvalQueryKeys.pending() });
     },
   });

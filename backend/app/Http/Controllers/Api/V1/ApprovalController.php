@@ -21,9 +21,9 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * ApprovalController — approval action endpoints for authenticated approvers.
+ * @OA\Tag(name="Approvals", description="Approval actions — approve, reject, return for revision. Pending approvals and history.")
  *
- * Endpoints:
- *   POST /api/v1/approvals/{id}/approve              — approve a document at current level
+ * Endpoints:              — approve a document at current level
  *   POST /api/v1/approvals/{id}/reject               — reject a document (mandatory reason)
  *   POST /api/v1/approvals/{id}/return               — return for revision (mandatory comments)
  *   GET  /api/v1/approvals/pending                   — list user's pending approvals
@@ -43,6 +43,17 @@ class ApprovalController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/approvals/{approval}/approve", operationId="approveDocument", tags={"Approvals"}, summary="Approve document at current level",
+     *     description="Advances the document to the next approval level or marks it approved if on the final level.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approval", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=false, @OA\JsonContent(@OA\Property(property="comment", type="string", nullable=true, example="Approved. Budget confirmed."))),
+     *     @OA\Response(response=200, description="Approved — document advanced or fully approved.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=403, description="Not authorised to act on this approval.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=422, description="Invalid state transition.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Approve a document at the current approval level.
      *
      * Requirements: 6.3, 6.6, 6.7
@@ -102,6 +113,17 @@ class ApprovalController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/approvals/{approval}/reject", operationId="rejectDocument", tags={"Approvals"}, summary="Reject document",
+     *     description="Rejects the document at the current level. Mandatory rejection reason. Notifies the originator.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approval", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Budget allocation insufficient for this fiscal year."))),
+     *     @OA\Response(response=200, description="Document rejected.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=403, description="Not authorised.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Reject a document at the current approval level.
      *
      * The rejection reason is mandatory (validated in RejectRequest).
@@ -162,6 +184,17 @@ class ApprovalController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/approvals/{approval}/return", operationId="returnDocumentForRevision", tags={"Approvals"}, summary="Return document for revision",
+     *     description="Returns the document to the originator for revision. Mandatory comments required.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approval", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"comments"}, @OA\Property(property="comments", type="string", example="Please attach supporting quotes from at least 3 vendors."))),
+     *     @OA\Response(response=200, description="Document returned for revision.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=403, description="Not authorised.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a document for revision at the current approval level.
      *
      * Revision comments are mandatory (validated in ReturnForRevisionRequest).
@@ -222,6 +255,15 @@ class ApprovalController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/approvals/pending", operationId="listPendingApprovals", tags={"Approvals"}, summary="List pending approvals for authenticated user",
+     *     description="Returns all approval records currently pending action from the authenticated user, ordered by creation date ascending.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Pending approvals returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/ApprovalResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return all pending approvals for the authenticated user.
      *
      * Requirements: 6.8
@@ -249,6 +291,16 @@ class ApprovalController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/approvals/history/{documentType}/{documentId}", operationId="approvalHistory", tags={"Approvals"}, summary="Get approval history for a document",
+     *     description="Returns the full approval history (all levels and actions) for the specified document.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="documentType", in="path", required=true, description="Document type, e.g. purchase_request, tender, purchase_order, contract, invoice.", @OA\Schema(type="string", enum={"purchase_request","tender","purchase_order","contract","invoice"})),
+     *     @OA\Parameter(name="documentId", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Approval history returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/ApprovalResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return the full approval history for a document across all levels.
      *
      * Requirements: 6.8

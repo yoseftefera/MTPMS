@@ -10,11 +10,13 @@ use Illuminate\Http\Request;
 | See App\Providers\AppServiceProvider::boot() for their definitions.
 |--------------------------------------------------------------------------
 */
-Route::prefix('v1')->group(function () {
 
-    // ── Health check (no auth, no tenant required) ──────────────────────────
-    Route::get('/health', [\App\Http\Controllers\Api\V1\HealthController::class, 'health'])
-        ->withoutMiddleware([\App\Http\Middleware\TenantIdentificationMiddleware::class]);
+// ── Health check — top-level, no auth, no tenant required ────────────────────
+// Requirement 20.10: expose at /api/health (outside the /v1 prefix)
+Route::get('/health', [\App\Http\Controllers\Api\V1\HealthController::class, 'health'])
+    ->withoutMiddleware([\App\Http\Middleware\TenantIdentificationMiddleware::class]);
+
+Route::prefix('v1')->group(function () {
 
     // ── Authentication (public, rate-limited) ────────────────────────────────
     Route::prefix('auth')->middleware('throttle:auth')->group(function () {
@@ -210,10 +212,11 @@ Route::prefix('v1')->group(function () {
         });
 
         // Notifications
+        // Static segments must be registered before the {notification} wildcard to avoid conflicts.
         Route::get('notifications',                          [\App\Http\Controllers\Api\V1\NotificationController::class, 'index']);
-        Route::patch('notifications/{notification}/read',    [\App\Http\Controllers\Api\V1\NotificationController::class, 'markAsRead']);
-        Route::post('notifications/read-all',                [\App\Http\Controllers\Api\V1\NotificationController::class, 'markAllAsRead']);
         Route::get('notifications/unread-count',             [\App\Http\Controllers\Api\V1\NotificationController::class, 'unreadCount']);
+        Route::patch('notifications/read-all',               [\App\Http\Controllers\Api\V1\NotificationController::class, 'markAllAsRead']);
+        Route::patch('notifications/{notification}/read',    [\App\Http\Controllers\Api\V1\NotificationController::class, 'markAsRead']);
 
         // Reports
         Route::middleware('role.check:reports.view')->group(function () {
@@ -227,12 +230,19 @@ Route::prefix('v1')->group(function () {
         });
 
         // Audit logs
+        // GET  is role-guarded; PUT/DELETE are open (controller always returns 403 — immutability enforcement).
         Route::middleware('role.check:audit_logs.view')->group(function () {
             Route::get('audit-logs', [\App\Http\Controllers\Api\V1\AuditLogController::class, 'index']);
         });
+        Route::put('audit-logs/{id}',    [\App\Http\Controllers\Api\V1\AuditLogController::class, 'update']);
+        Route::patch('audit-logs/{id}',  [\App\Http\Controllers\Api\V1\AuditLogController::class, 'update']);
+        Route::delete('audit-logs/{id}', [\App\Http\Controllers\Api\V1\AuditLogController::class, 'destroy']);
 
         // File management
-        Route::get('files/{file}',    [\App\Http\Controllers\Api\V1\FileController::class, 'download']);
+        // GET  /api/v1/files/download?path={base64EncodedPath}  — stream file (tenant-verified)
+        // DELETE /api/v1/files/{file}                            — soft-delete via audit log
+        // The static 'download' segment must be registered before the {file} wildcard.
+        Route::get('files/download',  [\App\Http\Controllers\Api\V1\FileController::class, 'download']);
         Route::delete('files/{file}', [\App\Http\Controllers\Api\V1\FileController::class, 'destroy']);
     });
 });

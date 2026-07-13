@@ -1,18 +1,20 @@
 import '../../../../core/network/api_client.dart';
+import '../models/dashboard_summary_model.dart';
 
-/// Remote data source for dashboard KPI data.
 abstract class DashboardRemoteDataSource {
-  Future<Map<String, dynamic>> getDashboardSummary();
+  Future<DashboardSummaryModel> getDashboardSummary();
 }
 
 class DashboardRemoteDataSourceImpl implements DashboardRemoteDataSource {
-  const DashboardRemoteDataSourceImpl(this._apiClient);
+  final ApiClient _client;
 
-  final ApiClient _apiClient;
+  const DashboardRemoteDataSourceImpl(this._client);
 
   @override
-  Future<Map<String, dynamic>> getDashboardSummary() async {
-    final data = await _apiClient.get('/supplier/dashboard');
-    return data as Map<String, dynamic>;
+  Future<DashboardSummaryModel> getDashboardSummary() async {
+    final response = await _client.get('/supplier/dashboard');
+    final data =
+        (response as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+    return DashboardSummaryModel.fromJson(data);
   }
 }

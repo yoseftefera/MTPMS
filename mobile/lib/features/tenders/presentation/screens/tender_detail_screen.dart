@@ -8,7 +8,7 @@ import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_indicator.dart';
 import '../../../../core/widgets/offline_banner.dart';
-import '../providers/tender_provider.dart';
+import '../providers/tender_providers.dart';
 
 class TenderDetailScreen extends ConsumerWidget {
   final String tenderId;

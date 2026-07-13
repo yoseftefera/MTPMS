@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -28,17 +29,21 @@ return new class extends Migration
             $table->json('inspection_votes')->nullable()->after('status');
         });
 
-        // MySQL requires raw ALTER to modify an ENUM column
-        DB::statement(
-            "ALTER TABLE goods_receipts MODIFY COLUMN status ENUM(
-                'draft',
-                'pending_inspection',
-                'under_inspection',
-                'accepted',
-                'partially_accepted',
-                'rejected'
-            ) NOT NULL DEFAULT 'draft'"
-        );
+        // Expand the status ENUM on MySQL only.
+        // SQLite does not support ENUM columns — the original migration created
+        // status as a plain VARCHAR, so no DDL change is needed there.
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement(
+                "ALTER TABLE goods_receipts MODIFY COLUMN status ENUM(
+                    'draft',
+                    'pending_inspection',
+                    'under_inspection',
+                    'accepted',
+                    'partially_accepted',
+                    'rejected'
+                ) NOT NULL DEFAULT 'draft'"
+            );
+        }
     }
 
     /**
@@ -54,14 +59,16 @@ return new class extends Migration
             $table->dropColumn('inspection_votes');
         });
 
-        DB::statement(
-            "ALTER TABLE goods_receipts MODIFY COLUMN status ENUM(
-                'draft',
-                'under_inspection',
-                'accepted',
-                'partially_accepted',
-                'rejected'
-            ) NOT NULL DEFAULT 'draft'"
-        );
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement(
+                "ALTER TABLE goods_receipts MODIFY COLUMN status ENUM(
+                    'draft',
+                    'under_inspection',
+                    'accepted',
+                    'partially_accepted',
+                    'rejected'
+                ) NOT NULL DEFAULT 'draft'"
+            );
+        }
     }
 };

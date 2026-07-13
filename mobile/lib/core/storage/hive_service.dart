@@ -22,10 +22,16 @@ class HiveService {
       Hive.openBox<Map>(AppConstants.authBoxName),
       Hive.openBox<Map>(AppConstants.dashboardBoxName),
       Hive.openBox<Map>(AppConstants.tendersBoxName),
+      Hive.openBox<Map>(AppConstants.hiveBoxTenderDetail),
       Hive.openBox<Map>(AppConstants.purchaseOrdersBoxName),
+      Hive.openBox<Map>(AppConstants.hiveBoxPurchaseOrderDetail),
       Hive.openBox<Map>(AppConstants.invoicesBoxName),
       Hive.openBox<Map>(AppConstants.notificationsBoxName),
       Hive.openBox<Map>(AppConstants.pendingOpsBoxName),
+      // Write queue persists mutations queued while offline.
+      Hive.openBox<String>(AppConstants.hiveWriteQueueBox),
+      // Meta box stores cache timestamps for CacheService.
+      Hive.openBox<String>(AppConstants.hiveCacheMetaBox),
     ]);
   }
 
@@ -104,7 +110,8 @@ class HiveService {
   // Convenience: list cache (24-hour TTL)
   // ---------------------------------------------------------------------------
 
-  static Future<void> putList(String boxName, String key, Map<String, dynamic> data) =>
+  static Future<void> putList(
+          String boxName, String key, Map<String, dynamic> data) =>
       put(boxName, key, data);
 
   static Map<String, dynamic>? getList(String boxName, String key) =>
@@ -114,7 +121,8 @@ class HiveService {
   // Convenience: detail cache (1-hour TTL)
   // ---------------------------------------------------------------------------
 
-  static Future<void> putDetail(String boxName, String key, Map<String, dynamic> data) =>
+  static Future<void> putDetail(
+          String boxName, String key, Map<String, dynamic> data) =>
       put(boxName, key, data);
 
   static Map<String, dynamic>? getDetail(String boxName, String key) =>

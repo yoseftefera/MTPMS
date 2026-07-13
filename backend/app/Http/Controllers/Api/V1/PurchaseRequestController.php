@@ -18,6 +18,8 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Purchase Requests", description="Purchase request creation, lifecycle, and document attachments.")
+ *
  * PurchaseRequestController — thin controller for the PR lifecycle.
  *
  * Endpoints:
@@ -44,16 +46,21 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of purchase requests, with optional filters.
+     * @OA\Get(path="/purchase-requests", operationId="listPurchaseRequests", tags={"Purchase Requests"}, summary="List purchase requests",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="pr_number", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="department_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"draft","pending_approval","approved","rejected","revision_required","cancelled"})),
+     *     @OA\Parameter(name="date_from", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="date_to", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="submitted_by", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Purchase requests list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/PurchaseRequestResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   pr_number     — exact or partial PR number match
-     *   department_id — filter by department UUID
-     *   status        — filter by status value
-     *   date_from     — filter submitted_at >= date (Y-m-d)
-     *   date_to       — filter submitted_at <= date (Y-m-d)
-     *   submitted_by  — filter by submitter UUID
-     *   per_page      — results per page (default 20, max 100)
+     * Return a paginated list of purchase requests, with optional filters.
      *
      * Requirements: 5.8
      */
@@ -84,9 +91,16 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create a new purchase request in draft status.
+     * @OA\Post(path="/purchase-requests", operationId="createPurchaseRequest", tags={"Purchase Requests"}, summary="Create purchase request",
+     *     description="Creates a new PR in draft status. PR number generated in format PR-{TENANT_CODE}-{YEAR}-{SEQ}.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"title","department_id","items"}, @OA\Property(property="title", type="string", example="Office Supplies Q1 2025"), @OA\Property(property="description", type="string", nullable=true), @OA\Property(property="department_id", type="string", format="uuid"), @OA\Property(property="required_date", type="string", format="date", nullable=true), @OA\Property(property="currency", type="string", example="USD"), @OA\Property(property="items", type="array", @OA\Items(@OA\Property(property="description", type="string"), @OA\Property(property="quantity", type="number"), @OA\Property(property="unit_of_measure", type="string"), @OA\Property(property="estimated_unit_price", type="number"), @OA\Property(property="budget_code", type="string", nullable=true))))),
+     *     @OA\Response(response=201, description="PR created.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseRequestResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Roles: Department_Staff and above.
+     * Create a new purchase request in draft status.
      *
      * Requirements: 5.1, 5.2
      */
@@ -111,10 +125,15 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a single purchase request with items, history, and department.
+     * @OA\Get(path="/purchase-requests/{purchaseRequest}", operationId="showPurchaseRequest", tags={"Purchase Requests"}, summary="Get purchase request",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseRequest", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="PR with items and history.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseRequestResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Tenant scope enforced via route model binding — returns 404 for
-     * PRs belonging to a different tenant.
+     * Return a single purchase request with items, history, and department.
      *
      * Requirements: 5.8
      */
@@ -133,6 +152,15 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Put(path="/purchase-requests/{purchaseRequest}", operationId="updatePurchaseRequest", tags={"Purchase Requests"}, summary="Update draft purchase request",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseRequest", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="title", type="string"), @OA\Property(property="description", type="string", nullable=true), @OA\Property(property="required_date", type="string", format="date", nullable=true), @OA\Property(property="items", type="array", @OA\Items(ref="#/components/schemas/PurchaseRequestItem")))),
+     *     @OA\Response(response=200, description="PR updated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseRequestResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="PR not in draft status or validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Update a purchase request that is currently in draft status.
      *
      * Requirements: 5.2, 5.5
@@ -158,10 +186,16 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Submit a purchase request for approval.
+     * @OA\Post(path="/purchase-requests/{purchaseRequest}/submit", operationId="submitPurchaseRequest", tags={"Purchase Requests"}, summary="Submit PR for approval",
+     *     description="Validates budget and transitions PR to pending_approval, triggering the approval workflow.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseRequest", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="PR submitted.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseRequestResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Budget exceeded — includes available_balance and shortfall.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=false), @OA\Property(property="data", type="object", @OA\Property(property="available_balance", type="string", example="10000.00"), @OA\Property(property="shortfall", type="string", example="5000.00")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", type="object"), @OA\Property(property="meta", nullable=true, example=null)))
+     * )
      *
-     * Returns HTTP 422 with budget details when BudgetExceededException is thrown,
-     * including available_balance and shortfall in the response data.
+     * Submit a purchase request for approval.
      *
      * Requirements: 5.3, 5.4, 5.6
      */
@@ -199,10 +233,16 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Cancel a purchase request.
+     * @OA\Post(path="/purchase-requests/{purchaseRequest}/cancel", operationId="cancelPurchaseRequest", tags={"Purchase Requests"}, summary="Cancel purchase request",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseRequest", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=false, @OA\JsonContent(@OA\Property(property="reason", type="string", example="No longer required."))),
+     *     @OA\Response(response=200, description="PR cancelled.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PurchaseRequestResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="PR cannot be cancelled in current state.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Request body (optional):
-     *   reason — cancellation reason (string)
+     * Cancel a purchase request.
      *
      * Requirements: 5.7
      */
@@ -228,12 +268,17 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/purchase-requests/{purchaseRequest}/documents", operationId="attachPRDocument", tags={"Purchase Requests"}, summary="Attach document to PR",
+     *     description="Uploads and attaches a document. Allowed types: PDF, DOCX, XLSX, PNG, JPG, JPEG. Max size: 10 MB.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseRequest", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\MediaType(mediaType="multipart/form-data", @OA\Schema(required={"file"}, @OA\Property(property="file", type="string", format="binary", description="File to attach (max 10 MB).")))),
+     *     @OA\Response(response=201, description="Document attached.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="object", @OA\Property(property="file_name", type="string"), @OA\Property(property="path", type="string"), @OA\Property(property="mime_type", type="string"), @OA\Property(property="size_bytes", type="integer")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Invalid file type or size.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Upload and attach a document to a purchase request.
-     *
-     * The file is stored at: {tenant_id}/purchase_requests/{uuid}.{ext}
-     * A non-guessable UUID is used for the stored filename to prevent enumeration.
-     *
-     * Returns HTTP 201 with file metadata on success.
      *
      * Requirements: 5.10
      */
@@ -273,9 +318,15 @@ class PurchaseRequestController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Soft-delete a purchase request (draft status only).
+     * @OA\Delete(path="/purchase-requests/{purchaseRequest}", operationId="deletePurchaseRequest", tags={"Purchase Requests"}, summary="Delete draft PR",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="purchaseRequest", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=204, description="PR deleted (no content).", ),
+     *     @OA\Response(response=422, description="PR is not in draft status.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Returns HTTP 204 on success.
+     * Soft-delete a purchase request (draft status only).
      *
      * Requirements: 5.5
      */

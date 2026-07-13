@@ -256,7 +256,7 @@ it('caches resolved tenant in Redis for 60 seconds', function () {
     // First call — populates cache
     $middleware->handle($request, fn () => response()->json(['ok' => true]));
 
-    $cacheKey = 'tenant:' . md5($tenant->id);
+    $cacheKey = "tenant:{$tenant->id}:config";
     expect(Cache::has($cacheKey))->toBeTrue();
 
     $cached = Cache::get($cacheKey);
@@ -266,7 +266,7 @@ it('caches resolved tenant in Redis for 60 seconds', function () {
 
 it('serves tenant from cache on subsequent requests without hitting the database', function () {
     $tenant = Tenant::factory()->create(['status' => Tenant::STATUS_ACTIVE]);
-    $cacheKey = 'tenant:' . md5($tenant->id);
+    $cacheKey = "tenant:{$tenant->id}:config";
 
     // Pre-populate cache
     Cache::put($cacheKey, $tenant, 60);

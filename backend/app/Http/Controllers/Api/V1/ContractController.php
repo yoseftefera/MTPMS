@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Contracts", description="Contract lifecycle: creation, activation, amendment, termination, and document uploads.")
+ *
  * ContractController — thin controller for the contract lifecycle.
  *
  * Endpoints:
@@ -44,14 +46,19 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of contracts, with optional filters.
+     * @OA\Get(path="/contracts", operationId="listContracts", tags={"Contracts"}, summary="List contracts",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"draft","pending_bond","active","expired","terminated","renewed"})),
+     *     @OA\Parameter(name="supplier_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="date_from", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="date_to", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Contracts list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/ContractResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   status       — filter by status value
-     *   supplier_id  — filter by supplier UUID
-     *   date_from    — filter created_at >= date (Y-m-d)
-     *   date_to      — filter created_at <= date (Y-m-d)
-     *   per_page     — results per page (default 20, max 100)
+     * Return a paginated list of contracts, with optional filters.
      *
      * Requirements: 11.1
      */
@@ -80,6 +87,14 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/contracts", operationId="createContract", tags={"Contracts"}, summary="Create contract",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"supplier_id","title","scope","total_value","start_date","end_date","payment_terms"}, @OA\Property(property="supplier_id", type="string", format="uuid"), @OA\Property(property="purchase_order_id", type="string", format="uuid", nullable=true), @OA\Property(property="tender_id", type="string", format="uuid", nullable=true), @OA\Property(property="title", type="string"), @OA\Property(property="scope", type="string"), @OA\Property(property="total_value", type="string", example="500000.00"), @OA\Property(property="currency", type="string", example="USD"), @OA\Property(property="start_date", type="string", format="date"), @OA\Property(property="end_date", type="string", format="date"), @OA\Property(property="payment_terms", type="string"))),
+     *     @OA\Response(response=201, description="Contract created.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ContractResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Create a new contract in draft status.
      *
      * Requirements: 11.1
@@ -105,6 +120,14 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/contracts/{contract}", operationId="showContract", tags={"Contracts"}, summary="Get contract",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="contract", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Contract with amendments and documents.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ContractResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single contract with all related details.
      *
      * Requirements: 11.1, 11.5
@@ -131,10 +154,16 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Activate a contract (draft → active).
+     * @OA\Post(path="/contracts/{contract}/activate", operationId="activateContract", tags={"Contracts"}, summary="Activate contract",
+     *     description="Transitions contract from draft to active. Blocked if no performance bond document is uploaded (HTTP 422).",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="contract", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Contract activated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ContractResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="No performance bond uploaded or invalid state.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Blocked if no performance bond document is uploaded — returns HTTP 422
-     * with a descriptive error message.
+     * Activate a contract (draft → active).
      *
      * Requirements: 11.7, 11.8
      */
@@ -159,10 +188,17 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Amend a contract with a documented reason.
+     * @OA\Post(path="/contracts/{contract}/amend", operationId="amendContract", tags={"Contracts"}, summary="Amend contract",
+     *     description="Amends contract with documented reason. Creates version history entry.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="contract", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Scope expanded to include additional deliverables."), @OA\Property(property="total_value", type="string", nullable=true, example="600000.00"), @OA\Property(property="end_date", type="string", format="date", nullable=true), @OA\Property(property="payment_terms", type="string", nullable=true))),
+     *     @OA\Response(response=200, description="Contract amended.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ContractResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Creates a version history entry (ContractAmendment) with before/after
-     * snapshot and the reason.
+     * Amend a contract with a documented reason.
      *
      * Requirements: 11.5, 11.6
      */
@@ -206,9 +242,17 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Terminate a contract (active → terminated).
+     * @OA\Post(path="/contracts/{contract}/terminate", operationId="terminateContract", tags={"Contracts"}, summary="Terminate contract",
+     *     description="Terminates an active contract with a documented reason.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="contract", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Supplier failed to meet contractual obligations."))),
+     *     @OA\Response(response=200, description="Contract terminated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ContractResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Contract not in active status.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * A termination reason is required.
+     * Terminate a contract (active → terminated).
      *
      * Requirements: 11.10
      */
@@ -234,10 +278,17 @@ class ContractController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Upload and attach a document to a contract.
+     * @OA\Post(path="/contracts/{contract}/documents", operationId="uploadContractDocument", tags={"Contracts"}, summary="Upload document to contract",
+     *     description="Accepted document types: performance_bond, signed_contract, amendment, other. Max 10 MB.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="contract", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\MediaType(mediaType="multipart/form-data", @OA\Schema(required={"file","document_type"}, @OA\Property(property="file", type="string", format="binary"), @OA\Property(property="document_type", type="string", enum={"performance_bond","signed_contract","amendment","other"})))),
+     *     @OA\Response(response=201, description="Document uploaded.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="object"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Invalid file.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Accepted document types: performance_bond, signed_contract, amendment, other.
-     * Max file size: 10 MB.
+     * Upload and attach a document to a contract.
      *
      * Requirements: 11.2, 11.7
      */

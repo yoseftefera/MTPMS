@@ -49,7 +49,8 @@ void main() {
 
       // Write an entry with a manually backdated _cachedAt timestamp.
       final box = Hive.box<Map>(AppConstants.tendersBoxName);
-      final backdated = DateTime.now().toUtc().subtract(const Duration(hours: 2));
+      final backdated =
+          DateTime.now().toUtc().subtract(const Duration(hours: 2));
       await box.put(key, {
         ...data,
         '_cachedAt': backdated.toIso8601String(),
@@ -95,7 +96,9 @@ void main() {
 
     test('putList uses 24-hour TTL and getList retrieves it', () async {
       const key = 'list_key';
-      final data = {'items': [1, 2, 3]};
+      final data = {
+        'items': [1, 2, 3]
+      };
 
       await HiveService.putList(AppConstants.tendersBoxName, key, data);
       final result = HiveService.getList(AppConstants.tendersBoxName, key);
@@ -113,6 +116,66 @@ void main() {
 
       expect(result, isNotNull);
       expect(result!['id'], equals('abc'));
+    });
+
+    test('getList returns null after 24-hour TTL has expired', () async {
+      const key = 'expired_list_key';
+      final box = Hive.box<Map>(AppConstants.tendersBoxName);
+      // Backdate the timestamp by 25 hours to simulate expiry.
+      final backdated =
+          DateTime.now().toUtc().subtract(const Duration(hours: 25));
+      await box.put(key, {
+        'items': [1, 2, 3],
+        '_cachedAt': backdated.toIso8601String(),
+      });
+
+      final result = HiveService.getList(AppConstants.tendersBoxName, key);
+      expect(result, isNull,
+          reason: 'Cache entry older than 24 h must be evicted');
+    });
+
+    test('getList returns data when entry is within 24-hour TTL', () async {
+      const key = 'fresh_list_key';
+      await HiveService.putList(
+        AppConstants.tendersBoxName,
+        key,
+        {
+          'items': ['a', 'b']
+        },
+      );
+
+      final result = HiveService.getList(AppConstants.tendersBoxName, key);
+      expect(result, isNotNull);
+      expect(result!['items'], equals(['a', 'b']));
+    });
+
+    test('getDetail returns null after 1-hour TTL has expired', () async {
+      const key = 'expired_detail_key';
+      final box = Hive.box<Map>(AppConstants.dashboardBoxName);
+      // Backdate by 2 hours — well past the 1-hour detail TTL.
+      final backdated =
+          DateTime.now().toUtc().subtract(const Duration(hours: 2));
+      await box.put(key, {
+        'id': 'tender-1',
+        '_cachedAt': backdated.toIso8601String(),
+      });
+
+      final result = HiveService.getDetail(AppConstants.dashboardBoxName, key);
+      expect(result, isNull,
+          reason: 'Cache entry older than 1 h must be evicted');
+    });
+
+    test('getDetail returns data when entry is within 1-hour TTL', () async {
+      const key = 'fresh_detail_key';
+      await HiveService.putDetail(
+        AppConstants.dashboardBoxName,
+        key,
+        {'id': 'tender-42', 'status': 'open'},
+      );
+
+      final result = HiveService.getDetail(AppConstants.dashboardBoxName, key);
+      expect(result, isNotNull);
+      expect(result!['id'], equals('tender-42'));
     });
 
     test('_cachedAt is stamped on put', () async {

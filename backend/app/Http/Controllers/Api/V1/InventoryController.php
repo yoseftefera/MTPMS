@@ -10,6 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
+ * @OA\Tag(name="Inventory", description="Real-time inventory search and retrieval per warehouse.")
+ *
  * InventoryController — read-only inventory search and retrieval.
  *
  * Endpoints:
@@ -27,14 +29,19 @@ class InventoryController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of inventory items.
+     * @OA\Get(path="/inventory", operationId="listInventory", tags={"Inventory"}, summary="List inventory items",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="warehouse_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="item_code", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="category", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="stock_level", in="query", required=false, @OA\Schema(type="string", enum={"below_reorder","above_reorder"})),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Inventory list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/InventoryResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   warehouse_id  — filter by warehouse UUID
-     *   item_code     — partial match on item code
-     *   category      — exact match on category
-     *   stock_level   — 'below_reorder' or 'above_reorder'
-     *   per_page      — results per page (default 20, max 100)
+     * Return a paginated list of inventory items.
      *
      * Requirements: 12.8
      */
@@ -66,9 +73,15 @@ class InventoryController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a single inventory record.
+     * @OA\Get(path="/inventory/{inventory}", operationId="showInventory", tags={"Inventory"}, summary="Get inventory item",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="inventory", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Inventory item returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/InventoryResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Tenant scope enforced via route model binding.
+     * Return a single inventory record.
      *
      * Requirements: 12.8
      */

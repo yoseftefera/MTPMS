@@ -4,10 +4,11 @@
  * Accessible at /approval-workflows (within the dashboard route group).
  * Tenant_Admin can view, create, edit, and deactivate approval workflows here.
  *
- * Validates: Requirements 6.8
+ * Validates: Requirements 6.8, 22.7
  */
 
 import { WorkflowsDataTable } from "@/components/approval-workflows/WorkflowsDataTable"
+import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary"
 
 export const metadata = {
   title: "Approval Workflows — PMP",
@@ -25,8 +26,10 @@ export default function ApprovalWorkflowsPage() {
         </p>
       </div>
 
-      {/* Data table (client component) */}
-      <WorkflowsDataTable />
+      {/* Data table (client component) — wrapped with error boundary */}
+      <SectionErrorBoundary title="Approval workflows table">
+        <WorkflowsDataTable />
+      </SectionErrorBoundary>
     </div>
   )
 }

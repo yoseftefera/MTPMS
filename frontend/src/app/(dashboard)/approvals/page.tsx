@@ -5,10 +5,11 @@
  * Shows all documents pending approval for the current user.
  * Auto-refreshes every 30 seconds.
  *
- * Validates: Requirements 22.5
+ * Validates: Requirements 22.5, 22.7
  */
 
 import { PendingApprovalsTable } from "@/components/approvals/PendingApprovalsTable"
+import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary"
 
 export const metadata = {
   title: "Pending Approvals — PMP",
@@ -27,8 +28,10 @@ export default function ApprovalsPage() {
         </p>
       </div>
 
-      {/* Approvals table (client component) */}
-      <PendingApprovalsTable />
+      {/* Approvals table (client component) — wrapped with error boundary */}
+      <SectionErrorBoundary title="Pending approvals table">
+        <PendingApprovalsTable />
+      </SectionErrorBoundary>
     </div>
   )
 }

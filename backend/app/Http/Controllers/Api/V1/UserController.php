@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
+ * @OA\Tag(name="Users", description="User management within tenant scope.")
+ *
  * UserController — thin controller for user management within tenant scope.
  *
  * Endpoints:
@@ -41,16 +43,38 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated, searchable, sortable list of users within the tenant.
+     * @OA\Get(
+     *     path="/users",
+     *     operationId="listUsers",
+     *     tags={"Users"},
+     *     summary="List users",
+     *     description="Returns a paginated, searchable, sortable list of users within the active tenant.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="search", in="query", required=false, @OA\Schema(type="string"), description="Filter by name or email (partial match)."),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"active","inactive","locked"})),
+     *     @OA\Parameter(name="department_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="role", in="query", required=false, @OA\Schema(type="string"), description="Filter by role name."),
+     *     @OA\Parameter(name="sort_by", in="query", required=false, @OA\Schema(type="string", default="created_at")),
+     *     @OA\Parameter(name="sort_dir", in="query", required=false, @OA\Schema(type="string", enum={"asc","desc"}, default="desc")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20, maximum=100)),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Users list returned.",
+     *     @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/UserResource")),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="errors", nullable=true, example=null),
+     *             @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=403, description="Forbidden.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   search        — filter by name or email (partial match)
-     *   status        — filter by status (active|inactive|locked)
-     *   department_id — filter by department UUID
-     *   role          — filter by role name
-     *   sort_by       — column to sort by (name|email|status|created_at|updated_at)
-     *   sort_dir      — sort direction (asc|desc)
-     *   per_page      — results per page (max 100, default 20)
+     * Return a paginated, searchable, sortable list of users within the tenant.
      *
      * Requirements: 4.6
      */
@@ -87,10 +111,43 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create a new user within the active tenant.
+     * @OA\Post(
+     *     path="/users",
+     *     operationId="createUser",
+     *     tags={"Users"},
+     *     summary="Create user",
+     *     description="Creates a new user within the active tenant. Sends a welcome email with a 24-hour password-setup link.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","email","role"},
+     *             @OA\Property(property="name", type="string", example="Jane Doe"),
+     *             @OA\Property(property="email", type="string", format="email", example="jane.doe@acme.com"),
+     *             @OA\Property(property="role", type="string", example="Procurement_Officer"),
+     *             @OA\Property(property="department_id", type="string", format="uuid", nullable=true),
+     *             @OA\Property(property="phone", type="string", nullable=true, example="+1-555-0100")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="User created.",
+     *     @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", ref="#/components/schemas/UserResource"),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="errors", nullable=true, example=null),
+     *             @OA\Property(property="meta", nullable=true, example=null)
+     *         )
+     *     ),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=403, description="Forbidden.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Sends a welcome email with a 24-hour password-setup link.
-     * Enforces unique email per tenant.
+     * Create a new user within the active tenant.
      *
      * Requirements: 4.1, 4.2, 4.8
      */
@@ -129,6 +186,20 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(
+     *     path="/users/{user}",
+     *     operationId="showUser",
+     *     tags={"Users"},
+     *     summary="Get user",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="User returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/UserResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single user within the active tenant.
      *
      * Requirements: 4.1
@@ -149,6 +220,21 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Put(
+     *     path="/users/{user}",
+     *     operationId="updateUser",
+     *     tags={"Users"},
+     *     summary="Update user",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="name", type="string"), @OA\Property(property="phone", type="string", nullable=true), @OA\Property(property="department_id", type="string", format="uuid", nullable=true), @OA\Property(property="status", type="string", enum={"active","inactive"}))),
+     *     @OA\Response(response=200, description="User updated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/UserResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Update a user's profile within the active tenant.
      *
      * Requirements: 4.7
@@ -179,9 +265,22 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Delete (soft-delete) a user within the active tenant.
+     * @OA\Delete(
+     *     path="/users/{user}",
+     *     operationId="deleteUser",
+     *     tags={"Users"},
+     *     summary="Delete user",
+     *     description="Soft-deletes the user. Rejected if user has active PRs or POs.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="User deleted.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=409, description="User has active records.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Rejects deletion if the user has active PRs or POs, returning the counts.
+     * Delete (soft-delete) a user within the active tenant.
      *
      * Requirements: 4.1, 4.9
      */
@@ -220,6 +319,21 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(
+     *     path="/users/{user}/roles",
+     *     operationId="assignRole",
+     *     tags={"Users"},
+     *     summary="Assign role to user",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"role"}, @OA\Property(property="role", type="string", example="Finance_Officer"))),
+     *     @OA\Response(response=200, description="Role assigned.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=403, description="Forbidden.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Assign a role to a user within the active tenant.
      *
      * Requirements: 3.3, 3.5, 3.6, 3.9
@@ -260,6 +374,21 @@ class UserController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Delete(
+     *     path="/users/{user}/roles/{role}",
+     *     operationId="revokeRole",
+     *     tags={"Users"},
+     *     summary="Revoke role from user",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="role", in="path", required=true, @OA\Schema(type="string"), description="Role name to revoke."),
+     *     @OA\Response(response=200, description="Role revoked.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=403, description="Forbidden.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Revoke a role from a user within the active tenant.
      *
      * Requirements: 3.3, 3.5, 3.6, 3.9

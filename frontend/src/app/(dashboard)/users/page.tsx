@@ -4,10 +4,11 @@
  * Accessible at /users (within the dashboard route group).
  * Tenant_Admin can view, create, edit, and deactivate users here.
  *
- * Validates: Requirements 4.1, 4.6, 22.6
+ * Validates: Requirements 4.1, 4.6, 22.6, 22.7
  */
 
 import { UsersDataTable } from "@/components/users/UsersDataTable"
+import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary"
 
 export const metadata = {
   title: "Users — PMP",
@@ -25,8 +26,10 @@ export default function UsersPage() {
         </p>
       </div>
 
-      {/* Data table (client component) */}
-      <UsersDataTable />
+      {/* Data table (client component) — wrapped with error boundary */}
+      <SectionErrorBoundary title="Users table">
+        <UsersDataTable />
+      </SectionErrorBoundary>
     </div>
   )
 }

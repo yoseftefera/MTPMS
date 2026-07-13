@@ -18,9 +18,12 @@ use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Suppliers", description="Supplier registration, verification, blacklisting, compliance documents, and performance metrics.")
+ *
  * SupplierController — thin HTTP layer for supplier lifecycle management.
  *
  * Public endpoint (no auth):
+ *
  *   POST   /api/v1/suppliers/register                         — self-registration
  *
  * Protected endpoints (auth.jwt + role.check:suppliers.view):
@@ -48,6 +51,26 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(
+     *     path="/suppliers/register",
+     *     operationId="supplierRegister",
+     *     tags={"Suppliers"},
+     *     summary="Self-register as a supplier (public)",
+     *     description="Any external party can submit a supplier registration. Tenant is resolved via X-Tenant-ID header or subdomain. Returns HTTP 201 with status pending_verification.",
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *         required={"organization_name","contact_name","contact_email","business_category"},
+     *         @OA\Property(property="organization_name", type="string", example="Acme Supplies Ltd."),
+     *         @OA\Property(property="contact_name", type="string", example="John Smith"),
+     *         @OA\Property(property="contact_email", type="string", format="email", example="john@acmesupplies.com"),
+     *         @OA\Property(property="contact_phone", type="string", nullable=true, example="+1-555-0199"),
+     *         @OA\Property(property="business_category", type="string", example="Office Supplies")
+     *     )),
+     *     @OA\Response(response=201, description="Registration submitted — pending_verification.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/SupplierResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Self-registration endpoint — any external party can submit this.
      * Tenant is resolved via TenantIdentificationMiddleware (subdomain / header).
      *
@@ -85,15 +108,23 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(
+     *     path="/suppliers",
+     *     operationId="listSuppliers",
+     *     tags={"Suppliers"},
+     *     summary="List suppliers",
+     *     description="Returns a paginated, filterable list of suppliers for the active tenant.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"pending_verification","active","blacklisted","inactive"})),
+     *     @OA\Parameter(name="business_category", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="search", in="query", required=false, @OA\Schema(type="string"), description="Partial match on organization_name, contact_name, or contact_email."),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Suppliers list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/SupplierResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a paginated, filterable list of suppliers for the active tenant.
-     *
-     * Query parameters:
-     *   status            — filter by status value
-     *   business_category — partial match
-     *   search            — partial match on organization_name / contact_name / contact_email
-     *   per_page          — max 100, default 20
-     *
-     * Roles: Procurement_Officer, Tenant_Admin (via suppliers.view permission)
      *
      * Requirements: 7.7
      */
@@ -121,6 +152,19 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(
+     *     path="/suppliers/{supplier}",
+     *     operationId="showSupplier",
+     *     tags={"Suppliers"},
+     *     summary="Get supplier",
+     *     description="Returns a single supplier with documents and performance metrics.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Supplier returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/SupplierResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single supplier with their documents and performance metrics.
      *
      * Requirements: 7.7
@@ -140,9 +184,20 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Update a supplier's profile fields.
+     * @OA\Put(
+     *     path="/suppliers/{supplier}",
+     *     operationId="updateSupplier",
+     *     tags={"Suppliers"},
+     *     summary="Update supplier profile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="organization_name", type="string"), @OA\Property(property="contact_name", type="string"), @OA\Property(property="contact_email", type="string", format="email"), @OA\Property(property="contact_phone", type="string", nullable=true), @OA\Property(property="business_category", type="string"))),
+     *     @OA\Response(response=200, description="Supplier updated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/SupplierResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Allowed fields: organization_name, contact_name, contact_email, contact_phone, business_category
+     * Update a supplier's profile fields.
      *
      * Requirements: 7.7
      */
@@ -169,6 +224,18 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Delete(
+     *     path="/suppliers/{supplier}",
+     *     operationId="deleteSupplier",
+     *     tags={"Suppliers"},
+     *     summary="Delete (deactivate) supplier",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=204, description="Supplier deactivated (no content).", ),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Soft-delete a supplier (sets status to inactive and marks deleted_at).
      *
      * Requirements: 7.7
@@ -186,9 +253,20 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Approve a pending supplier registration (pending_verification → active).
+     * @OA\Post(
+     *     path="/suppliers/{supplier}/approve",
+     *     operationId="approveSupplier",
+     *     tags={"Suppliers"},
+     *     summary="Approve supplier registration",
+     *     description="Transitions supplier from pending_verification to active. Sends confirmation email.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Supplier approved.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/SupplierResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Invalid state transition.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Roles: Procurement_Officer
+     * Approve a pending supplier registration (pending_verification → active).
      *
      * Requirements: 7.3
      */
@@ -218,9 +296,20 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Reject a pending supplier registration (pending_verification → inactive).
+     * @OA\Post(
+     *     path="/suppliers/{supplier}/reject",
+     *     operationId="rejectSupplier",
+     *     tags={"Suppliers"},
+     *     summary="Reject supplier registration",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Incomplete documentation."))),
+     *     @OA\Response(response=200, description="Supplier rejected.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/SupplierResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Invalid state.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Roles: Procurement_Officer
+     * Reject a pending supplier registration (pending_verification → inactive).
      *
      * Requirements: 7.2
      */
@@ -251,12 +340,21 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(
+     *     path="/suppliers/{supplier}/blacklist",
+     *     operationId="blacklistSupplier",
+     *     tags={"Suppliers"},
+     *     summary="Blacklist supplier",
+     *     description="Blacklists a supplier with a mandatory documented reason. Blacklisted suppliers cannot submit bids or receive POs. Recorded in the audit log.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"reason"}, @OA\Property(property="reason", type="string", example="Multiple delivery failures and misrepresentation of quality."))),
+     *     @OA\Response(response=200, description="Supplier blacklisted.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/SupplierResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Blacklist a supplier with a mandatory documented reason.
-     *
-     * A blacklisted supplier cannot submit bids or receive purchase orders.
-     * The action, reason, and actor are recorded in the Audit_Log.
-     *
-     * Roles: Procurement_Officer
      *
      * Requirements: 7.4, 7.5
      */
@@ -287,10 +385,20 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of performance metric observations for a supplier.
+     * @OA\Get(
+     *     path="/suppliers/{supplier}/performance",
+     *     operationId="supplierPerformance",
+     *     tags={"Suppliers"},
+     *     summary="Get supplier performance metrics",
+     *     description="Returns aggregate on-time delivery rate, quality acceptance rate, and paginated performance history.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Performance metrics.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="object", @OA\Property(property="summary", type="object", @OA\Property(property="on_time_delivery_rate", type="string", example="95.50"), @OA\Property(property="quality_acceptance_rate", type="string", example="98.20")), @OA\Property(property="records", type="array", @OA\Items(type="object"))), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta")))
+     * )
      *
-     * Also includes the aggregate rates (on_time_delivery_rate and
-     * quality_acceptance_rate) from the supplier record itself.
+     * Return a paginated list of performance metric observations for a supplier.
      *
      * Requirements: 7.6, 7.7
      */
@@ -317,10 +425,21 @@ class SupplierController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Upload a compliance document for a supplier.
+     * @OA\Post(
+     *     path="/suppliers/{supplier}/documents",
+     *     operationId="uploadSupplierDocument",
+     *     tags={"Suppliers"},
+     *     summary="Upload compliance document for supplier",
+     *     description="Accepted types: tin_certificate, vat_certificate, business_license, performance_bond, other. Max 10 MB. Automatically versions the document for the given type.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\MediaType(mediaType="multipart/form-data", @OA\Schema(required={"file","document_type"}, @OA\Property(property="file", type="string", format="binary"), @OA\Property(property="document_type", type="string", enum={"tin_certificate","vat_certificate","business_license","performance_bond","other"}), @OA\Property(property="expires_at", type="string", format="date", nullable=true)))),
+     *     @OA\Response(response=201, description="Document uploaded.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="object"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Invalid file type or size.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Automatically increments the version number for the given document_type.
-     * Returns HTTP 201 with the new document record.
+     * Upload a compliance document for a supplier.
      *
      * Requirements: 7.10
      */

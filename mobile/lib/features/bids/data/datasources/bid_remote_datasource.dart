@@ -1,34 +1,69 @@
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
+import '../models/bid_model.dart';
 
 abstract class BidRemoteDataSource {
-  Future<Map<String, dynamic>> submitBid({
+  Future<BidModel> submitBid({
     required String tenderId,
-    required Map<String, dynamic> bidData,
+    required double totalAmount,
+    required int deliveryDays,
+    String? technicalNotes,
+    List<String>? documentPaths,
   });
-
-  Future<Map<String, dynamic>> getBidForTender(String tenderId);
 }
 
 class BidRemoteDataSourceImpl implements BidRemoteDataSource {
-  const BidRemoteDataSourceImpl(this._apiClient);
+  final ApiClient _client;
 
-  final ApiClient _apiClient;
+  const BidRemoteDataSourceImpl(this._client);
 
   @override
-  Future<Map<String, dynamic>> submitBid({
+  Future<BidModel> submitBid({
     required String tenderId,
-    required Map<String, dynamic> bidData,
+    required double totalAmount,
+    required int deliveryDays,
+    String? technicalNotes,
+    List<String>? documentPaths,
   }) async {
-    final data = await _apiClient.post(
-      '/tenders/$tenderId/bids',
-      data: bidData,
-    );
-    return data as Map<String, dynamic>;
-  }
+    // Build multipart form if documents are attached.
+    if (documentPaths != null && documentPaths.isNotEmpty) {
+      final formData = FormData.fromMap({
+        'total_amount': totalAmount.toString(),
+        'delivery_days': deliveryDays,
+        if (technicalNotes != null) 'technical_notes': technicalNotes,
+        'documents': await Future.wait(
+          documentPaths.map(
+            (path) async => await MultipartFile.fromFile(
+              path,
+              filename: path.split('/').last,
+            ),
+          ),
+        ),
+      });
 
-  @override
-  Future<Map<String, dynamic>> getBidForTender(String tenderId) async {
-    final data = await _apiClient.get('/tenders/$tenderId/bids/my-bid');
-    return data as Map<String, dynamic>;
+      final response = await _client.post(
+        '/tenders/$tenderId/bids',
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+        ),
+      );
+      final data =
+          (response as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+      return BidModel.fromJson(data);
+    }
+
+    final response = await _client.post(
+      '/tenders/$tenderId/bids',
+      data: {
+        'total_amount': totalAmount.toString(),
+        'delivery_days': deliveryDays,
+        if (technicalNotes != null) 'technical_notes': technicalNotes,
+      },
+    );
+    final data =
+        (response as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+    return BidModel.fromJson(data);
   }
 }

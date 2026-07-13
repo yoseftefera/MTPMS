@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Goods Receipts", description="Goods receipt note creation, committee inspection workflow, and GRN lifecycle.")
+ *
  * GoodsReceiptController — thin controller for the GRN lifecycle.
  *
  * Endpoints:
@@ -35,12 +37,17 @@ class GoodsReceiptController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of goods receipts with optional filters.
+     * @OA\Get(path="/goods-receipts", operationId="listGoodsReceipts", tags={"Goods Receipts"}, summary="List goods receipts",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"draft","under_inspection","accepted","partially_accepted","rejected"})),
+     *     @OA\Parameter(name="purchase_order_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Goods receipts list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/GoodsReceiptResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   status            — filter by GRN status
-     *   purchase_order_id — filter by PO UUID
-     *   per_page          — results per page (default 20, max 100)
+     * Return a paginated list of goods receipts with optional filters.
      *
      * Requirements: 12.1
      */
@@ -67,9 +74,15 @@ class GoodsReceiptController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create a new Goods Receipt Note in pending_inspection status.
+     * @OA\Post(path="/goods-receipts", operationId="createGoodsReceipt", tags={"Goods Receipts"}, summary="Create goods receipt note (GRN)",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"purchase_order_id","warehouse_id","delivery_note_number","received_at","items"}, @OA\Property(property="purchase_order_id", type="string", format="uuid"), @OA\Property(property="warehouse_id", type="string", format="uuid"), @OA\Property(property="delivery_note_number", type="string", example="DN-2025-001"), @OA\Property(property="received_at", type="string", format="date-time"), @OA\Property(property="items", type="array", @OA\Items(@OA\Property(property="purchase_order_item_id", type="string", format="uuid"), @OA\Property(property="received_quantity", type="number"))))),
+     *     @OA\Response(response=201, description="GRN created.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/GoodsReceiptResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Roles: Store_Manager
+     * Create a new Goods Receipt Note in pending_inspection status.
      *
      * Requirements: 12.1, 12.10
      */
@@ -94,6 +107,14 @@ class GoodsReceiptController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/goods-receipts/{goodsReceipt}", operationId="showGoodsReceipt", tags={"Goods Receipts"}, summary="Get goods receipt",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="goodsReceipt", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="GRN with related data.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/GoodsReceiptResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single GRN with all related data.
      *
      * Requirements: 12.1
@@ -113,11 +134,17 @@ class GoodsReceiptController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/goods-receipts/{goodsReceipt}/assign-committee", operationId="assignGRNCommittee", tags={"Goods Receipts"}, summary="Assign inspection committee",
+     *     description="Assigns ≥2 Committee_Members to inspect the GRN. Transitions status to under_inspection.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="goodsReceipt", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"committee_user_ids"}, @OA\Property(property="committee_user_ids", type="array", minItems=2, @OA\Items(type="string", format="uuid")))),
+     *     @OA\Response(response=200, description="Committee assigned, inspection started.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/GoodsReceiptResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Fewer than 2 committee members or invalid state.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Assign ≥2 Committee_Members to inspect this GRN.
-     *
-     * Transitions status: pending_inspection → under_inspection.
-     *
-     * Roles: Store_Manager
      *
      * Requirements: 12.2
      */
@@ -146,12 +173,17 @@ class GoodsReceiptController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/goods-receipts/{goodsReceipt}/inspection-result", operationId="submitGRNInspectionResult", tags={"Goods Receipts"}, summary="Submit inspection result",
+     *     description="Submits one inspector's votes for all GRN line items. Once all assigned inspectors submit, inspection is finalized via majority vote.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="goodsReceipt", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"inspector_id","results"}, @OA\Property(property="inspector_id", type="string", format="uuid"), @OA\Property(property="results", type="array", @OA\Items(@OA\Property(property="item_id", type="string", format="uuid"), @OA\Property(property="accepted", type="boolean"), @OA\Property(property="rejection_reason", type="string", nullable=true))))),
+     *     @OA\Response(response=200, description="Inspection result submitted.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/GoodsReceiptResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Inspector not assigned or inspection already finalized.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Submit one inspector's votes for all GRN line items.
-     *
-     * Once all assigned inspectors have submitted, inspection is finalized
-     * automatically (majority vote applied).
-     *
-     * Roles: Committee_Member
      *
      * Requirements: 12.3, 12.10
      */

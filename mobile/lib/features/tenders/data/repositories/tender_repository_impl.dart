@@ -1,9 +1,10 @@
+import 'dart:convert';
+
 import 'package:dartz/dartz.dart';
+import 'package:dio/dio.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
-import '../../../../core/network/network_info.dart';
 import '../../../../core/storage/hive_service.dart';
 import '../../domain/entities/tender.dart';
 import '../../domain/repositories/tender_repository.dart';
@@ -11,88 +12,85 @@ import '../datasources/tender_remote_datasource.dart';
 import '../models/tender_model.dart';
 
 class TenderRepositoryImpl implements TenderRepository {
-  final TenderRemoteDataSource _remote;
-  final NetworkInfo _networkInfo;
+  final TenderRemoteDataSource _remoteDataSource;
 
-  const TenderRepositoryImpl({
-    required TenderRemoteDataSource remote,
-    required NetworkInfo networkInfo,
-  })  : _remote = remote,
-        _networkInfo = networkInfo;
+  const TenderRepositoryImpl(this._remoteDataSource);
 
   @override
-  Future<Either<Failure, List<Tender>>> getTenders({
-    int page = 1,
-    String? category,
-    String? status,
-  }) async {
-    final cacheKey = 'tenders_p${page}_c${category ?? ''}_s${status ?? ''}';
-
-    if (await _networkInfo.isConnected) {
-      try {
-        final tenders = await _remote.getTenders(
-          page: page,
-          category: category,
-          status: status,
-        );
-        // Cache the result (24-hour TTL for list data).
+  Future<Either<Failure, List<Tender>>> getOpenTenders({int page = 1}) async {
+    try {
+      final models = await _remoteDataSource.getOpenTenders(page: page);
+      // Cache first page only.
+      if (page == 1) {
         await HiveService.putList(
           AppConstants.tendersBoxName,
-          cacheKey,
-          {'items': tenders.map((t) => (t).toJson()).toList()},
+          'open_tenders',
+          {
+            'items': jsonEncode(
+                models.map((m) => (m as TenderModel).toJson()).toList())
+          },
         );
-        return Right(tenders);
-      } on NetworkException {
-        return const Left(NetworkFailure());
-      } on AuthException catch (e) {
-        return Left(AuthFailure(message: e.message));
-      } on AppException catch (e) {
-        return Left(
-            ServerFailure(message: e.message, statusCode: e.statusCode));
       }
+      return Right(models);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        final cached =
+            HiveService.getList(AppConstants.tendersBoxName, 'open_tenders');
+        if (cached != null) {
+          final items = jsonDecode(cached['items'] as String) as List<dynamic>;
+          return Right(
+            items
+                .map((e) => TenderModel.fromJson(e as Map<String, dynamic>))
+                .toList(),
+          );
+        }
+        return Left(const NetworkFailure());
+      }
+      return Left(ServerFailure(
+        message: _parseError(e),
+        statusCode: e.response?.statusCode,
+      ));
+    } catch (e) {
+      return Left(ServerFailure(message: e.toString()));
     }
-
-    // Offline: return cached data.
-    final cached = HiveService.getList(AppConstants.tendersBoxName, cacheKey);
-    if (cached != null) {
-      final items = (cached['items'] as List)
-          .map((e) => TenderModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-      return Right(items);
-    }
-
-    return const Left(NetworkFailure());
   }
 
   @override
-  Future<Either<Failure, Tender>> getTenderById(String id) async {
-    final cacheKey = 'tender_$id';
-
-    if (await _networkInfo.isConnected) {
-      try {
-        final tender = await _remote.getTenderById(id);
-        await HiveService.putDetail(
+  Future<Either<Failure, Tender>> getTender(String tenderId) async {
+    try {
+      final model = await _remoteDataSource.getTender(tenderId);
+      await HiveService.putDetail(
+        AppConstants.tendersBoxName,
+        'tender_$tenderId',
+        model.toJson(),
+      );
+      return Right(model);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        final cached = HiveService.getDetail(
           AppConstants.tendersBoxName,
-          cacheKey,
-          (tender).toJson(),
+          'tender_$tenderId',
         );
-        return Right(tender);
-      } on NotFoundException {
-        return const Left(NotFoundFailure());
-      } on AuthException catch (e) {
-        return Left(AuthFailure(message: e.message));
-      } on AppException catch (e) {
-        return Left(
-            ServerFailure(message: e.message, statusCode: e.statusCode));
+        if (cached != null) return Right(TenderModel.fromJson(cached));
+        return Left(const NetworkFailure());
       }
+      return Left(ServerFailure(
+        message: _parseError(e),
+        statusCode: e.response?.statusCode,
+      ));
+    } catch (e) {
+      return Left(ServerFailure(message: e.toString()));
     }
+  }
 
-    // Offline: return cached detail.
-    final cached = HiveService.getDetail(AppConstants.tendersBoxName, cacheKey);
-    if (cached != null) {
-      return Right(TenderModel.fromJson(cached));
+  String _parseError(DioException e) {
+    try {
+      final data = e.response?.data as Map<String, dynamic>?;
+      return data?['message'] as String? ?? 'Failed to load tenders.';
+    } catch (_) {
+      return 'Failed to load tenders.';
     }
-
-    return const Left(NetworkFailure());
   }
 }

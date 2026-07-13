@@ -15,6 +15,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * @OA\Tag(name="Approval Workflows", description="Configure multi-level approval chains for PRs, Tenders, POs, Contracts, and Invoices.")
+ *
  * ApprovalWorkflowController — CRUD for approval workflow configuration.
  *
  * All endpoints are restricted to Tenant_Admin via route middleware.
@@ -38,6 +40,33 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(
+     *     path="/approval-workflows",
+     *     operationId="listApprovalWorkflows",
+     *     tags={"Approval Workflows"},
+     *     summary="List approval workflows",
+     *     description="Returns a paginated list of approval workflow configurations for the active tenant.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="document_type", in="query", required=false, @OA\Schema(type="string", enum={"purchase_request","tender","purchase_order","contract","invoice"})),
+     *     @OA\Parameter(name="is_active", in="query", required=false, @OA\Schema(type="integer", enum={0,1})),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Workflows list returned.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/ApprovalWorkflowResource")),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="errors", nullable=true, example=null),
+     *             @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=403, description="Forbidden.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a paginated list of approval workflows for the active tenant.
      *
      * Query parameters:
@@ -75,6 +104,38 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(
+     *     path="/approval-workflows",
+     *     operationId="createApprovalWorkflow",
+     *     tags={"Approval Workflows"},
+     *     summary="Create approval workflow",
+     *     description="Creates a new approval workflow with its initial levels. Levels are sequential approval stages (1–10 max).",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","document_type","levels"},
+     *             @OA\Property(property="name", type="string", example="Standard PR Approval"),
+     *             @OA\Property(property="document_type", type="string", enum={"purchase_request","tender","purchase_order","contract","invoice"}),
+     *             @OA\Property(property="department_id", type="string", format="uuid", nullable=true),
+     *             @OA\Property(property="is_active", type="boolean", example=true),
+     *             @OA\Property(property="levels", type="array", @OA\Items(
+     *                 @OA\Property(property="level_order", type="integer", example=1),
+     *                 @OA\Property(property="approver_type", type="string", enum={"role","user"}),
+     *                 @OA\Property(property="approver_role", type="string", nullable=true, example="Finance_Officer"),
+     *                 @OA\Property(property="approver_user_id", type="string", format="uuid", nullable=true),
+     *                 @OA\Property(property="is_parallel", type="boolean", example=false),
+     *                 @OA\Property(property="escalation_hours", type="integer", example=48)
+     *             ))
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Workflow created.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ApprovalWorkflowResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse")),
+     *     @OA\Response(response=403, description="Forbidden.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Create a new approval workflow together with its initial levels.
      *
      * Requirements: 6.2
@@ -117,6 +178,19 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(
+     *     path="/approval-workflows/{approvalWorkflow}",
+     *     operationId="showApprovalWorkflow",
+     *     tags={"Approval Workflows"},
+     *     summary="Get approval workflow",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approvalWorkflow", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Workflow returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ApprovalWorkflowResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single approval workflow with its levels.
      *
      * Requirements: 6.2
@@ -136,6 +210,20 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Put(
+     *     path="/approval-workflows/{approvalWorkflow}",
+     *     operationId="updateApprovalWorkflow",
+     *     tags={"Approval Workflows"},
+     *     summary="Update approval workflow",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approvalWorkflow", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="name", type="string"), @OA\Property(property="department_id", type="string", format="uuid", nullable=true), @OA\Property(property="is_active", type="boolean"))),
+     *     @OA\Response(response=200, description="Workflow updated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ApprovalWorkflowResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Update an approval workflow's name, department, or active status.
      *
      * Note: levels are managed individually via addLevel / removeLevel.
@@ -158,6 +246,20 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Delete(
+     *     path="/approval-workflows/{approvalWorkflow}",
+     *     operationId="deleteApprovalWorkflow",
+     *     tags={"Approval Workflows"},
+     *     summary="Deactivate approval workflow",
+     *     description="Sets is_active=false to preserve historical documents. Does not hard-delete.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"),
+     *     @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approvalWorkflow", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Workflow deactivated.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Deactivate (soft-delete) an approval workflow by setting is_active = false.
      *
      * Rather than hard-deleting, we deactivate so existing documents using
@@ -180,6 +282,16 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/approval-workflows/{approvalWorkflow}/levels", operationId="addApprovalWorkflowLevel", tags={"Approval Workflows"}, summary="Add level to approval workflow",
+     *     description="Appends a new sequential level to an existing approval workflow. level_order, approver_type are required.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approvalWorkflow", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"level_order","approver_type"}, @OA\Property(property="level_order", type="integer", example=2), @OA\Property(property="approver_type", type="string", enum={"role","user"}), @OA\Property(property="approver_role", type="string", nullable=true, example="Finance_Officer"), @OA\Property(property="approver_user_id", type="string", format="uuid", nullable=true), @OA\Property(property="is_parallel", type="boolean", example=false), @OA\Property(property="escalation_hours", type="integer", example=48))),
+     *     @OA\Response(response=201, description="Level added.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/ApprovalWorkflowLevel"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Add a new level to an existing approval workflow.
      *
      * Requirements: 6.2
@@ -208,6 +320,16 @@ class ApprovalWorkflowController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Delete(path="/approval-workflows/{approvalWorkflow}/levels/{levelId}", operationId="removeApprovalWorkflowLevel", tags={"Approval Workflows"}, summary="Remove level from approval workflow",
+     *     description="Deletes a specific level from an approval workflow. Returns 404 if the level does not belong to the specified workflow.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="approvalWorkflow", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="levelId", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Level removed.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=404, description="Level not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Remove a level from an approval workflow.
      *
      * Returns HTTP 404 when the level does not belong to the specified workflow.

@@ -29,6 +29,16 @@ use Spatie\Permission\PermissionRegistrar;
 class RBACService
 {
     /**
+     * Cache TTL for role and user permission sets (seconds).
+     * Defaults to 300 seconds (Requirement 24.3).
+     * Configurable via PERMISSION_CACHE_TTL env var → cache.permission_ttl.
+     */
+    private function getPermissionCacheTtl(): int
+    {
+        return (int) config('cache.permission_ttl', 300);
+    }
+
+    /**
      * Roles that cannot be assigned or revoked through the tenant-facing interface.
      *
      * Requirement 3.5
@@ -211,16 +221,65 @@ class RBACService
     }
 
     /**
+     * Build the canonical Redis cache key for a user's permission set.
+     *
+     * Key pattern: `tenant:{tenantId}:user:{userId}:permissions`
+     *
+     * Requirement 24.3
+     */
+    private function userPermissionCacheKey(User $user): string
+    {
+        $tenantId = $user->tenant_id ?? (app()->has('tenant') ? app('tenant')->id : 'global');
+        return "tenant:{$tenantId}:user:{$user->id}:permissions";
+    }
+
+    /**
      * Get all permissions for a given role.
+     *
+     * Results are cached in Redis under `role:permissions:{roleName}` with a
+     * 300-second TTL (Requirement 24.3). The cache is invalidated immediately
+     * whenever a role assignment or revocation changes the user's permission set.
      *
      * @param  string  $roleName
      * @return \Illuminate\Database\Eloquent\Collection|null
      */
     public function getRolePermissions(string $roleName): ?\Illuminate\Database\Eloquent\Collection
     {
-        $role = Role::where('name', $roleName)->where('guard_name', 'api')->first();
+        $cacheKey = "role:permissions:{$roleName}";
 
-        return $role?->permissions;
+        /** @var \Illuminate\Database\Eloquent\Collection|null $permissions */
+        $permissions = Cache::store('redis')->remember(
+            $cacheKey,
+            $this->getPermissionCacheTtl(),
+            function () use ($roleName) {
+                $role = Role::where('name', $roleName)->where('guard_name', 'api')->first();
+                return $role?->permissions;
+            },
+        );
+
+        return $permissions;
+    }
+
+    /**
+     * Get all permissions for a specific user.
+     *
+     * Results are cached in Redis under the canonical key pattern
+     * `tenant:{tenantId}:user:{userId}:permissions` with a 300-second TTL
+     * (Requirement 24.3). Invalidated immediately on any role change for that
+     * user (Requirement 3.6).
+     *
+     * @param  User  $user
+     * @return \Illuminate\Support\Collection
+     */
+    public function getUserPermissions(User $user): \Illuminate\Support\Collection
+    {
+        $cacheKey = $this->userPermissionCacheKey($user);
+
+        return Cache::store('redis')->remember(
+            $cacheKey,
+            $this->getPermissionCacheTtl(),
+            fn () => $user->getAllPermissions()->pluck('name'),
+        );
     }
 
     /**
@@ -232,9 +291,12 @@ class RBACService
      * Strategy:
      *  1. Call Spatie's PermissionRegistrar::forgetCachedPermissions() to clear
      *     the global permission cache (roles + permissions table data).
-     *  2. Clear any user-specific cache keys that Spatie may have stored.
+     *  2. Clear the canonical user key `tenant:{tenantId}:user:{userId}:permissions`
+     *     (Req 24.3).
+     *  3. Clear role-level `role:permissions:{roleName}` keys for all roles the
+     *     user holds, so callers of getRolePermissions() also get fresh data.
      *
-     * Requirement 3.6
+     * Requirements: 3.6, 24.3
      */
     public function invalidatePermissionCache(User $user): void
     {
@@ -242,17 +304,21 @@ class RBACService
             // Clear Spatie's global permission/role cache
             app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-            // Clear any user-specific permission cache entries
-            // Spatie caches per-user permissions under a key derived from the user's ID
-            $cacheKey = 'spatie.permission.cache';
-            Cache::forget($cacheKey);
+            // Clear legacy Spatie per-cache-store key (belt-and-suspenders)
+            Cache::forget('spatie.permission.cache');
+            Cache::store('redis')->forget('spatie.permission.cache');
 
-            // Also clear the user-model-level cache if Spatie uses it
-            $userCacheKey = sprintf('spatie.permission.user.%s', $user->id);
-            Cache::forget($userCacheKey);
+            // Clear user-specific permission cache using canonical key pattern (Requirement 24.3)
+            Cache::store('redis')->forget($this->userPermissionCacheKey($user));
+
+            // Clear role-level permission caches for all roles the user holds
+            foreach ($user->getRoleNames() as $roleName) {
+                Cache::store('redis')->forget("role:permissions:{$roleName}");
+            }
 
             Log::debug('RBACService: permission cache invalidated', [
-                'user_id' => $user->id,
+                'user_id'   => $user->id,
+                'cache_key' => $this->userPermissionCacheKey($user),
             ]);
         } catch (\Throwable $e) {
             // Log but never let cache invalidation failure break the role change

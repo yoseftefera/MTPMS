@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
+ * @OA\Tag(name="Departments", description="Department management within tenant scope.")
+ *
  * DepartmentController — thin controller for department management within tenant scope.
  *
  * Endpoints:
@@ -40,15 +42,17 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated, searchable list of departments within the tenant.
+     * @OA\Get(path="/departments", operationId="listDepartments", tags={"Departments"}, summary="List departments",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="search", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"active","inactive"})),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Departments list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/DepartmentResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   search    — filter by name or code (partial match)
-     *   status    — filter by status (active|inactive)
-     *   parent_id — filter by parent department UUID (pass 'null' for root departments)
-     *   sort_by   — column to sort by (name|code|status|created_at|updated_at)
-     *   sort_dir  — sort direction (asc|desc)
-     *   per_page  — results per page (max 100, default 20)
+     * Return a paginated, searchable list of departments within the tenant.
      *
      * Requirements: 4.3
      */
@@ -84,10 +88,15 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Create a new department within the active tenant.
+     * @OA\Post(path="/departments", operationId="createDepartment", tags={"Departments"}, summary="Create department",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"name","code"}, @OA\Property(property="name", type="string", example="Finance"), @OA\Property(property="code", type="string", example="FIN"), @OA\Property(property="parent_id", type="string", format="uuid", nullable=true))),
+     *     @OA\Response(response=201, description="Department created.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/DepartmentResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Enforces unique department code per tenant.
-     * Validates parent_id belongs to the same tenant when provided.
+     * Create a new department within the active tenant.
      *
      * Requirements: 4.3, 4.5
      */
@@ -126,6 +135,14 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/departments/{department}", operationId="showDepartment", tags={"Departments"}, summary="Get department",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="department", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Department returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/DepartmentResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single department within the active tenant.
      *
      * Requirements: 4.3
@@ -146,6 +163,15 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Put(path="/departments/{department}", operationId="updateDepartment", tags={"Departments"}, summary="Update department",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="department", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="name", type="string"), @OA\Property(property="code", type="string"), @OA\Property(property="parent_id", type="string", format="uuid", nullable=true))),
+     *     @OA\Response(response=200, description="Department updated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/DepartmentResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Validation error.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Update a department's name, code, or parent within the active tenant.
      *
      * Requirements: 4.3, 4.5
@@ -186,9 +212,15 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Soft-delete a department within the active tenant.
+     * @OA\Delete(path="/departments/{department}", operationId="deleteDepartment", tags={"Departments"}, summary="Delete department",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="department", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Department deleted.", @OA\JsonContent(ref="#/components/schemas/SuccessResponse")),
+     *     @OA\Response(response=409, description="Cannot delete — has children or active users.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Guards against deletion if the department has child departments or active users.
+     * Soft-delete a department within the active tenant.
      *
      * Requirements: 4.3, 4.4
      */
@@ -227,12 +259,16 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Patch(path="/departments/{department}/status", operationId="updateDepartmentStatus", tags={"Departments"}, summary="Activate or deactivate department",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="department", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"action"}, @OA\Property(property="action", type="string", enum={"activate","deactivate"}))),
+     *     @OA\Response(response=200, description="Status updated.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/DepartmentResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Invalid action.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Activate or deactivate a department.
-     *
-     * Request body: { "action": "activate" | "deactivate" }
-     *
-     * Deactivating preserves all historical records.
-     * Deactivated departments block new PR submissions (enforced by DepartmentService).
      *
      * Requirements: 4.4
      */
@@ -283,10 +319,13 @@ class DepartmentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return the full department hierarchy as a nested tree.
+     * @OA\Get(path="/departments/hierarchy", operationId="departmentHierarchy", tags={"Departments"}, summary="Get department hierarchy tree",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Response(response=200, description="Nested department tree.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/DepartmentResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null)))
+     * )
      *
-     * Root departments are returned at the top level;
-     * each department carries a nested `children` array recursively.
+     * Return the full department hierarchy as a nested tree.
      *
      * Requirements: 4.5
      */

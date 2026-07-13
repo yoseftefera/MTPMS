@@ -14,6 +14,15 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 class TenantIdentificationMiddleware
 {
     /**
+     * Routes that should bypass tenant identification entirely.
+     * Used as a safety net in addition to route-level ->withoutMiddleware().
+     */
+    private const EXCLUDED_PATHS = [
+        'api/health',
+        'api/health-check',
+    ];
+
+    /**
      * Resolve the active tenant from:
      *   1. X-Tenant-ID header
      *   2. Subdomain (tenant.platform.com)
@@ -26,6 +35,13 @@ class TenantIdentificationMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Skip tenant resolution for explicitly excluded paths
+        foreach (self::EXCLUDED_PATHS as $excludedPath) {
+            if ($request->is($excludedPath)) {
+                return $next($request);
+            }
+        }
+
         $tenantId = $this->resolveTenantIdentifier($request);
 
         if (! $tenantId) {
@@ -170,21 +186,73 @@ class TenantIdentificationMiddleware
 
     /**
      * Resolve the Tenant model from the identifier.
-     * Results are cached in Redis for TENANT_CACHE_TTL seconds (default: 60).
      *
-     * Supports both UUID lookup and subdomain slug lookup.
+     * Uses two dedicated Redis cache keys with 300s TTL (Requirement 24.3):
+     *   - `tenant:{uuid}:config`        — keyed by tenant UUID (canonical config key)
+     *   - `tenant:subdomain:{slug}`     — keyed by subdomain slug (maps slug → UUID)
+     *
+     * A subdomain lookup is first resolved to a UUID via the subdomain key,
+     * then the UUID config key is used to store/retrieve the full Tenant model.
+     * This allows targeted invalidation when a tenant record changes.
+     *
+     * Key pattern for tenant config: `tenant:{tenantId}:config`
+     * Requirement 24.3
      */
     private function resolveTenant(string $identifier): ?Tenant
     {
-        $ttl = (int) config('app.tenant_cache_ttl', 60);
-        $cacheKey = 'tenant:' . md5($identifier);
+        $ttl = (int) config('cache.tenant_config_ttl', 300);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($identifier) {
-            // Try UUID lookup first, then subdomain slug
-            return Tenant::where('id', $identifier)
-                ->orWhere('subdomain', $identifier)
-                ->first();
-        });
+        // Determine if the identifier looks like a UUID
+        $isUuid = preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+            $identifier,
+        );
+
+        if ($isUuid) {
+            // Direct UUID lookup — store full tenant under `tenant:{uuid}:config`
+            return Cache::store('redis')->remember(
+                "tenant:{$identifier}:config",
+                $ttl,
+                fn () => Tenant::where('id', $identifier)->first(),
+            );
+        }
+
+        // Subdomain lookup — first resolve subdomain → UUID, then UUID → tenant config
+        $subdomainKey = "tenant:subdomain:{$identifier}";
+        $tenantId = Cache::store('redis')->remember(
+            $subdomainKey,
+            $ttl,
+            function () use ($identifier) {
+                $tenant = Tenant::where('subdomain', $identifier)->first();
+                return $tenant?->id;
+            },
+        );
+
+        if (! $tenantId) {
+            return null;
+        }
+
+        return Cache::store('redis')->remember(
+            "tenant:{$tenantId}:config",
+            $ttl,
+            fn () => Tenant::where('id', $tenantId)->first(),
+        );
+    }
+
+    /**
+     * Invalidate all Redis cache keys for a given tenant.
+     *
+     * Should be called after any tenant update or status change.
+     * Clears both the canonical config key and the subdomain lookup key.
+     *
+     * Requirement 24.3
+     *
+     * @param  Tenant  $tenant
+     */
+    public static function invalidateTenantCache(Tenant $tenant): void
+    {
+        Cache::store('redis')->forget("tenant:{$tenant->id}:config");
+        Cache::store('redis')->forget("tenant:subdomain:{$tenant->subdomain}");
     }
 
     /**

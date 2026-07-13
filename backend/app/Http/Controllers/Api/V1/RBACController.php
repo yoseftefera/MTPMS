@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 /**
+ * @OA\Tag(name="RBAC", description="Role assignment and revocation for tenant users (Tenant_Admin only).")
+ *
  * RBACController — role assignment and revocation for tenant users.
  *
  * Endpoints:
@@ -35,9 +37,7 @@ class RBACController extends Controller
      * POST /api/v1/users/{user}/roles
      *
      * Assign a role to a user within the current tenant.
-     *
-     * Request body:
-     *   { "role": "Procurement_Officer" }
+     * See UserController::assignRole for full OpenAPI documentation.
      *
      * Requirements: 3.3, 3.5, 3.6, 3.9
      */
@@ -79,6 +79,7 @@ class RBACController extends Controller
      * DELETE /api/v1/users/{user}/roles/{role}
      *
      * Revoke a role from a user within the current tenant.
+     * See UserController::revokeRole for full OpenAPI documentation.
      *
      * Requirements: 3.3, 3.5, 3.6, 3.9
      */

@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Bids", description="Bid submission and revision for tenders. Includes document uploads.")
+ *
  * BidController — thin HTTP layer for the bid submission lifecycle.
  *
  * Endpoints (all nested under /api/v1/tenders/{tender}/bids):
@@ -45,13 +47,21 @@ class BidController extends Controller
     // =========================================================================
 
     /**
+     * @OA\Get(
+     *     path="/tenders/{tender}/bids",
+     *     operationId="listBids",
+     *     tags={"Bids"},
+     *     summary="List bids for a tender",
+     *     description="Suppliers only see their own bid. Procurement officers and admins see all bids.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="tender", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Bids list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/BidResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a paginated list of bids for the given tender.
-     *
-     * Suppliers only see their own bid.
-     * Officers and admins see all bids for the tender.
-     *
-     * Query parameters:
-     *   per_page — results per page (default 20, max 100)
      *
      * Requirements: 8.7
      */
@@ -81,14 +91,27 @@ class BidController extends Controller
     // =========================================================================
 
     /**
+     * @OA\Post(
+     *     path="/tenders/{tender}/bids",
+     *     operationId="submitBid",
+     *     tags={"Bids"},
+     *     summary="Submit bid for a tender",
+     *     description="Validates submission timestamp against deadline. Enforces one bid per supplier. Supplier must be active.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="tender", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *         required={"total_amount","delivery_days"},
+     *         @OA\Property(property="total_amount", type="string", example="195000.00"),
+     *         @OA\Property(property="currency", type="string", example="USD"),
+     *         @OA\Property(property="delivery_days", type="integer", example=30),
+     *         @OA\Property(property="technical_notes", type="string", nullable=true)
+     *     )),
+     *     @OA\Response(response=201, description="Bid submitted.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/BidResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Deadline passed, duplicate bid, or supplier not active.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Submit a new bid for the given tender.
-     *
-     * Rules enforced:
-     *  - Tender must be `published` and submission_deadline must not have passed (Req 8.4).
-     *  - Supplier must not have an existing bid for this tender (Req 8.5).
-     *  - Supplier must be active (Req 7.9).
-     *
-     * Returns HTTP 422 when any business rule is violated (deadline passed, duplicate bid, etc.).
      *
      * Requirements: 8.4, 8.5
      */
@@ -130,10 +153,21 @@ class BidController extends Controller
     // =========================================================================
 
     /**
-     * Return a single bid.
+     * @OA\Get(
+     *     path="/tenders/{tender}/bids/{bid}",
+     *     operationId="showBid",
+     *     tags={"Bids"},
+     *     summary="Get bid",
+     *     description="Suppliers may only view their own bid — returns HTTP 404 for others' bids.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="tender", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="bid", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Bid returned.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/BidResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Suppliers may only view their own bid — returns HTTP 404 for others' bids.
-     * Officers and admins may view any bid for the tender.
+     * Return a single bid.
      *
      * Requirements: 8.7
      */
@@ -169,10 +203,21 @@ class BidController extends Controller
     // =========================================================================
 
     /**
-     * Revise an existing bid before the tender's submission deadline.
+     * @OA\Patch(
+     *     path="/tenders/{tender}/bids/{bid}",
+     *     operationId="reviseBid",
+     *     tags={"Bids"},
+     *     summary="Revise bid before deadline",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="tender", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="bid", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="total_amount", type="string", example="190000.00"), @OA\Property(property="delivery_days", type="integer", example=25), @OA\Property(property="technical_notes", type="string", nullable=true))),
+     *     @OA\Response(response=200, description="Bid revised.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/BidResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Deadline passed or bid does not belong to supplier.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Returns HTTP 422 when the deadline has passed or the bid does not
-     * belong to the authenticated supplier.
+     * Revise an existing bid before the tender's submission deadline.
      *
      * Requirements: 8.4, 8.5
      */
@@ -219,10 +264,21 @@ class BidController extends Controller
     // =========================================================================
 
     /**
-     * Upload a document and attach it to an existing bid.
+     * @OA\Post(
+     *     path="/tenders/{tender}/bids/{bid}/documents",
+     *     operationId="uploadBidDocument",
+     *     tags={"Bids"},
+     *     summary="Upload document to bid",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="tender", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="bid", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\MediaType(mediaType="multipart/form-data", @OA\Schema(required={"file","document_type"}, @OA\Property(property="file", type="string", format="binary"), @OA\Property(property="document_type", type="string", example="technical_proposal")))),
+     *     @OA\Response(response=201, description="Document uploaded.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="object"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Deadline passed or access denied.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Returns HTTP 422 when the deadline has passed or the bid does not
-     * belong to the authenticated supplier.
+     * Upload a document and attach it to an existing bid.
      *
      * Requirements: 8.4, 8.5
      */

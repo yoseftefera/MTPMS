@@ -4,10 +4,11 @@
  * Accessible at /tenders (within the dashboard route group).
  * Procurement_Officer / Tenant_Admin / Committee_Member can view and manage tenders.
  *
- * Validates: Requirements 8.1, 8.3, 22.6
+ * Validates: Requirements 8.1, 8.3, 22.6, 22.7
  */
 
 import { TendersDataTable } from "@/components/tenders/TendersDataTable"
+import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary"
 
 export const metadata = {
   title: "Tenders — PMP",
@@ -25,8 +26,10 @@ export default function TendersPage() {
         </p>
       </div>
 
-      {/* Data table (client component) */}
-      <TendersDataTable />
+      {/* Data table (client component) — wrapped with error boundary */}
+      <SectionErrorBoundary title="Tenders table">
+        <TendersDataTable />
+      </SectionErrorBoundary>
     </div>
   )
 }

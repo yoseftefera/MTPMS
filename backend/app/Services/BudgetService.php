@@ -12,6 +12,7 @@ use App\Models\PurchaseRequest;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -41,6 +42,35 @@ class BudgetService
      * BCMath decimal scale (2 decimal places, matching DECIMAL(15,2) columns).
      */
     private const SCALE = 2;
+
+    /**
+     * Redis cache TTL for budget summary reports (seconds).
+     * Defaults to 300 seconds (Requirement 24.3).
+     * Configurable via BUDGET_SUMMARY_CACHE_TTL env var → cache.budget_summary_ttl.
+     */
+    private function getBudgetSummaryCacheTtl(): int
+    {
+        return (int) config('cache.budget_summary_ttl', 300);
+    }
+
+    /**
+     * Build the canonical Redis cache key for a budget summary.
+     *
+     * Key patterns (Requirement 24.3):
+     *   - With department: `tenant:{tenantId}:budget:{departmentId}:{fiscalYear}`
+     *   - Tenant-wide:     `tenant:{tenantId}:budget:all:{fiscalYear}`
+     *
+     * @param  string       $tenantId
+     * @param  int          $fiscalYear
+     * @param  string|null  $departmentId
+     */
+    private function budgetSummaryCacheKey(string $tenantId, int $fiscalYear, ?string $departmentId = null): string
+    {
+        if ($departmentId) {
+            return "tenant:{$tenantId}:budget:{$departmentId}:{$fiscalYear}";
+        }
+        return "tenant:{$tenantId}:budget:all:{$fiscalYear}";
+    }
 
     // -------------------------------------------------------------------------
     // 13.1 — Budget Allocation
@@ -151,6 +181,9 @@ class BudgetService
             ipAddress:  $ipAddress,
             requestId:  $requestId,
         );
+
+        // Requirement 24.4 — invalidate budget summary cache immediately on allocation/reallocation
+        $this->invalidateBudgetSummaryCache($budget);
 
         return [
             'success' => true,
@@ -332,6 +365,9 @@ class BudgetService
             requestId:  $requestId,
         );
 
+        // Requirement 24.4 — invalidate budget summary cache immediately on mutation
+        $this->invalidateBudgetSummaryCache($budget->fresh());
+
         // Check and dispatch threshold notifications
         $this->checkAndDispatchThresholdNotifications($budget->fresh(), $actor?->tenant_id ?? app('tenant')->id);
 
@@ -440,6 +476,9 @@ class BudgetService
             ipAddress:  $ipAddress,
             requestId:  $requestId,
         );
+
+        // Requirement 24.4 — invalidate budget summary cache immediately on mutation
+        $this->invalidateBudgetSummaryCache($budget->fresh());
 
         return [
             'success' => true,
@@ -566,6 +605,9 @@ class BudgetService
             ipAddress:  $ipAddress,
             requestId:  $requestId,
         );
+
+        // Requirement 24.4 — invalidate budget summary cache immediately on mutation
+        $this->invalidateBudgetSummaryCache($budget->fresh());
 
         // Check and dispatch threshold notifications
         $this->checkAndDispatchThresholdNotifications($budget->fresh(), $actor?->tenant_id ?? app('tenant')->id);
@@ -738,6 +780,10 @@ class BudgetService
         // Check threshold for destination (it now has more to spend)
         $this->checkAndDispatchThresholdNotifications($destinationBudget->fresh(), $tenantId);
 
+        // Requirement 24.4 — invalidate budget summary cache for both sides of the transfer
+        $this->invalidateBudgetSummaryCache($sourceBudget->fresh());
+        $this->invalidateBudgetSummaryCache($destinationBudget->fresh());
+
         return [
             'success' => true,
             'message' => 'Budget transferred successfully.',
@@ -753,6 +799,59 @@ class BudgetService
     }
 
     // -------------------------------------------------------------------------
+    // Cache Invalidation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Invalidate the Redis budget summary cache for the tenant and fiscal year
+     * associated with the given budget record.
+     *
+     * Called immediately after every write operation that mutates encumbered_amount
+     * or spent_amount so that the next call to getUtilizationReport() returns
+     * fresh data rather than stale cached values.
+     *
+     * Cache keys invalidated (Requirement 24.3):
+     *   - `tenant:{tenantId}:budget:all:{fiscalYear}`                 (tenant-wide)
+     *   - `tenant:{tenantId}:budget:{departmentId}:{fiscalYear}`      (dept-scoped variant)
+     *
+     * Requirement 24.3, 24.4
+     *
+     * @param  Budget  $budget  The freshly updated budget record
+     */
+    public function invalidateBudgetSummaryCache(Budget $budget): void
+    {
+        try {
+            $tenantId     = $budget->tenant_id ?? (app()->has('tenant') ? app('tenant')->id : null);
+            $fiscalYear   = $budget->fiscal_year;
+            $departmentId = $budget->department_id;
+
+            if (! $tenantId || ! $fiscalYear) {
+                return;
+            }
+
+            // Tenant-wide summary key: tenant:{tenantId}:budget:all:{fiscalYear}
+            Cache::store('redis')->forget($this->budgetSummaryCacheKey($tenantId, $fiscalYear));
+
+            // Department-scoped summary key: tenant:{tenantId}:budget:{departmentId}:{fiscalYear}
+            if ($departmentId) {
+                Cache::store('redis')->forget($this->budgetSummaryCacheKey($tenantId, $fiscalYear, $departmentId));
+            }
+
+            Log::debug('BudgetService: budget summary cache invalidated', [
+                'tenant_id'     => $tenantId,
+                'fiscal_year'   => $fiscalYear,
+                'department_id' => $departmentId,
+            ]);
+        } catch (\Throwable $e) {
+            // Never let cache invalidation failure break a budget mutation
+            Log::warning('BudgetService: failed to invalidate budget summary cache', [
+                'budget_id' => $budget->id,
+                'error'     => $e->getMessage(),
+            ]);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // 13.10 — Real-time Utilization Report
     // -------------------------------------------------------------------------
 
@@ -760,7 +859,13 @@ class BudgetService
      * Return a real-time budget utilization summary for all departments
      * (or a single department) for a given fiscal year within the active tenant.
      *
-     * Requirements: 13.10
+     * Results are cached in Redis under the canonical key pattern:
+     *   - `tenant:{tenantId}:budget:{departmentId}:{fiscalYear}` (dept-scoped)
+     *   - `tenant:{tenantId}:budget:all:{fiscalYear}`             (tenant-wide)
+     * with a 300-second TTL (Requirement 24.3). The cache is invalidated
+     * immediately by any BudgetService mutation method.
+     *
+     * Requirements: 13.10, 24.3
      *
      * @param  int         $fiscalYear
      * @param  string|null $departmentId  Optionally filter to a single department
@@ -769,6 +874,28 @@ class BudgetService
      *                     available_amount, utilization_percent, committed_percent
      */
     public function getUtilizationReport(int $fiscalYear, ?string $departmentId = null): Collection
+    {
+        $tenantId = app()->has('tenant') ? app('tenant')->id : 'global';
+
+        // Use canonical key pattern: tenant:{tenantId}:budget:{departmentId}:{fiscalYear}
+        // or tenant:{tenantId}:budget:all:{fiscalYear} for tenant-wide summaries
+        $cacheKey = $this->budgetSummaryCacheKey($tenantId, $fiscalYear, $departmentId);
+
+        return Cache::store('redis')->remember(
+            $cacheKey,
+            $this->getBudgetSummaryCacheTtl(),
+            function () use ($fiscalYear, $departmentId) {
+                return $this->computeUtilizationReport($fiscalYear, $departmentId);
+            },
+        );
+    }
+
+    /**
+     * Perform the actual utilization report query and computation.
+     * Called by getUtilizationReport() — separated so it can be used
+     * directly in contexts where caching should be bypassed.
+     */
+    private function computeUtilizationReport(int $fiscalYear, ?string $departmentId = null): Collection
     {
         $query = Budget::with(['department'])
             ->where('fiscal_year', $fiscalYear);

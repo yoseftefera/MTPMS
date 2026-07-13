@@ -5,10 +5,11 @@
  * Procurement_Officer / Tenant_Admin can view, approve, reject, and blacklist suppliers.
  * All authenticated users can browse the supplier list.
  *
- * Validates: Requirements 7.6, 7.7, 22.6
+ * Validates: Requirements 7.6, 7.7, 22.6, 22.7
  */
 
 import { SuppliersDataTable } from "@/components/suppliers/SuppliersDataTable"
+import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary"
 
 export const metadata = {
   title: "Suppliers — PMP",
@@ -26,8 +27,10 @@ export default function SuppliersPage() {
         </p>
       </div>
 
-      {/* Data table (client component) */}
-      <SuppliersDataTable />
+      {/* Data table (client component) — wrapped with error boundary */}
+      <SectionErrorBoundary title="Suppliers table">
+        <SuppliersDataTable />
+      </SectionErrorBoundary>
     </div>
   )
 }

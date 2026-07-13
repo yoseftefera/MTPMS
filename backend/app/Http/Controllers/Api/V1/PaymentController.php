@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 
 /**
+ * @OA\Tag(name="Payments", description="Payment tracking, schedule, and recording against invoices.")
+ *
  * PaymentController — thin controller for the payment lifecycle.
  *
  * Endpoints:
@@ -34,12 +36,17 @@ class PaymentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
-     * Return a paginated list of payments.
+     * @OA\Get(path="/payments", operationId="listPayments", tags={"Payments"}, summary="List payments",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="invoice_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"pending","processed","failed"})),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=20)),
+     *     @OA\Response(response=200, description="Payments list.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/PaymentResource")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", ref="#/components/schemas/PaginationMeta"))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
      *
-     * Query parameters:
-     *   invoice_id — filter by invoice UUID
-     *   status     — filter by payment status
-     *   per_page   — results per page (default 20, max 100)
+     * Return a paginated list of payments.
      *
      * Requirements: 14.5
      */
@@ -71,6 +78,17 @@ class PaymentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/payments/schedule", operationId="paymentSchedule", tags={"Payments"}, summary="Payment schedule",
+     *     description="Returns approved and partially-paid invoices with amount_due and due_date. Roles: Finance_Officer.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="supplier_id", in="query", required=false, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Parameter(name="date_from", in="query", required=false, @OA\Schema(type="string", format="date", example="2025-01-01")),
+     *     @OA\Parameter(name="date_to", in="query", required=false, @OA\Schema(type="string", format="date", example="2025-12-31")),
+     *     @OA\Response(response=200, description="Payment schedule.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", type="array", @OA\Items(type="object")), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=401, description="Unauthenticated.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return the payment schedule: approved and partially_paid invoices with
      * amount_due and due_date.
      *
@@ -102,6 +120,15 @@ class PaymentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Get(path="/payments/{payment}", operationId="showPayment", tags={"Payments"}, summary="Get payment",
+     *     description="Returns a single payment record with invoice and processor details.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="payment", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\Response(response=200, description="Payment details.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PaymentResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=404, description="Not found.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Return a single payment with invoice and processor details.
      *
      * Requirements: 14.5
@@ -121,6 +148,16 @@ class PaymentController extends Controller
     // -------------------------------------------------------------------------
 
     /**
+     * @OA\Post(path="/payments/{payment}/record", operationId="recordPayment", tags={"Payments"}, summary="Record payment against invoice",
+     *     description="Records a full or partial payment. Updates invoice paid_amount and transitions payment/invoice status. Roles: Finance_Officer.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(ref="#/components/parameters/XTenantID"), @OA\Parameter(ref="#/components/parameters/XRequestID"),
+     *     @OA\Parameter(name="payment", in="path", required=true, @OA\Schema(type="string", format="uuid")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"amount","payment_method"}, @OA\Property(property="amount", type="string", example="48750.00"), @OA\Property(property="payment_method", type="string", example="bank_transfer"), @OA\Property(property="payment_reference", type="string", nullable=true, example="TXN-20250101-001"))),
+     *     @OA\Response(response=200, description="Payment recorded.", @OA\JsonContent(@OA\Property(property="success", type="boolean", example=true), @OA\Property(property="data", ref="#/components/schemas/PaymentResource"), @OA\Property(property="message", type="string"), @OA\Property(property="errors", nullable=true, example=null), @OA\Property(property="meta", nullable=true, example=null))),
+     *     @OA\Response(response=422, description="Payment exceeds outstanding amount.", @OA\JsonContent(ref="#/components/schemas/ErrorResponse"))
+     * )
+     *
      * Record a payment (full or partial) against the invoice.
      *
      * Updates invoice paid_amount and transitions invoice/payment status.

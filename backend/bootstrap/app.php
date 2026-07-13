@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AddRequestIdMiddleware;
 use App\Http\Middleware\TenantIdentificationMiddleware;
 use App\Http\Middleware\AuditTrailMiddleware;
 use Illuminate\Foundation\Application;
@@ -16,7 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Global middleware applied to all requests
+        // Global middleware applied to all requests — X-Request-ID must run first
+        // so every response (including errors) carries the header.
+        $middleware->prepend(AddRequestIdMiddleware::class);
+
+        // Tenant identification runs after the request ID is established
         $middleware->append(TenantIdentificationMiddleware::class);
 
         // API middleware group

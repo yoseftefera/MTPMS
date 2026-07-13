@@ -4,13 +4,9 @@ import '../../../../core/errors/failures.dart';
 import '../entities/tender.dart';
 
 abstract class TenderRepository {
-  /// Returns a paginated list of published tenders.
-  Future<Either<Failure, List<Tender>>> getTenders({
-    int page = 1,
-    String? category,
-    String? status,
-  });
+  /// Returns published tenders the supplier can bid on.
+  Future<Either<Failure, List<Tender>>> getOpenTenders({int page = 1});
 
-  /// Returns the detail of a single tender by [id].
-  Future<Either<Failure, Tender>> getTenderById(String id);
+  /// Returns a single tender by ID.
+  Future<Either<Failure, Tender>> getTender(String tenderId);
 }

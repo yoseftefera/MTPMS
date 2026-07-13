@@ -244,102 +244,102 @@ This plan converts the PMP design into incremental coding tasks for a Laravel 12
 
 
 - [ ] 14. Invoice & Payment Processing
-  - [ ] 14.1 Implement `InvoiceService`: supplier invoice submission referencing PO or Contract, validate invoiced amount does not exceed PO/Contract value and goods have been received and accepted, route through Invoice approval workflow, reject with discrepancy details if over-value
+  - [x] 14.1 Implement `InvoiceService`: supplier invoice submission referencing PO or Contract, validate invoiced amount does not exceed PO/Contract value and goods have been received and accepted, route through Invoice approval workflow, reject with discrepancy details if over-value
     - _Requirements: 14.1, 14.2, 14.3, 14.4_
 
-  - [ ] 14.2 Implement `PaymentService`: create payment record on invoice approval, partial payment support (status → `partially_paid` until settled), payment due date reminder scheduler (5 days before due), payment schedule report
+  - [x] 14.2 Implement `PaymentService`: create payment record on invoice approval, partial payment support (status → `partially_paid` until settled), payment due date reminder scheduler (5 days before due), payment schedule report
     - _Requirements: 14.5, 14.6, 14.7, 14.8, 14.9, 14.10_
 
-  - [ ] 14.3 Implement frontend: Invoice list page (filterable by status/supplier/date), invoice detail page (line items, PO/contract reference, approval history), payment management page (payment schedule, record payment form)
+  - [x] 14.3 Implement frontend: Invoice list page (filterable by status/supplier/date), invoice detail page (line items, PO/contract reference, approval history), payment management page (payment schedule, record payment form)
     - _Requirements: 14.1, 14.10, 22.6_
 
 
 
-- [ ] 15. Notifications System
-  - [ ] 15.1 Implement `NotificationService` with Laravel Echo + Soketi WebSocket broadcasting: private tenant-scoped channels (`private-tenant.{tenantId}.user.{userId}`), channel authorization in `routes/channels.php`, real-time in-app delivery, database persistence with `is_read` tracking
+- [x] 15. Notifications System
+  - [x] 15.1 Implement `NotificationService` with Laravel Echo + Soketi WebSocket broadcasting: private tenant-scoped channels (`private-tenant.{tenantId}.user.{userId}`), channel authorization in `routes/channels.php`, real-time in-app delivery, database persistence with `is_read` tracking
     - _Requirements: 15.1, 15.3, 15.6, 15.10_
 
-  - [ ] 15.2 Implement all 15 notification event types and their listeners: `PurchaseRequestSubmitted`, `PurchaseRequestStatusChanged`, `TenderPublished`, `BidDeadlineApproaching`, `BidEvaluationCompleted`, `PurchaseOrderIssued`, `PurchaseOrderStatusChanged`, `GoodsReceiptCreated`, `InvoiceSubmitted`, `InvoiceStatusChanged`, `PaymentProcessed`, `BudgetThresholdReached`, `ContractRenewalAlert`, `AccountLocked`, `LowStockAlert`
+  - [x] 15.2 Implement all 15 notification event types and their listeners: `PurchaseRequestSubmitted`, `PurchaseRequestStatusChanged`, `TenderPublished`, `BidDeadlineApproaching`, `BidEvaluationCompleted`, `PurchaseOrderIssued`, `PurchaseOrderStatusChanged`, `GoodsReceiptCreated`, `InvoiceSubmitted`, `InvoiceStatusChanged`, `PaymentProcessed`, `BudgetThresholdReached`, `ContractRenewalAlert`, `AccountLocked`, `LowStockAlert`
     - _Requirements: 15.5_
 
-  - [ ] 15.3 Implement queue-based email notifications via `SendNotificationEmailJob` on `notifications` queue; retry 3 times with exponential backoff; log failure and alert System_Admin after 3 failed attempts; respect per-tenant notification configuration
+  - [x] 15.3 Implement queue-based email notifications via `SendNotificationEmailJob` on `notifications` queue; retry 3 times with exponential backoff; log failure and alert System_Admin after 3 failed attempts; respect per-tenant notification configuration
     - _Requirements: 15.2, 15.8, 15.9_
 
-  - [ ] 15.4 Implement Notification API endpoints: list (paginated, filterable by event type/date), mark individual as read, mark all as read, unread count
+  - [x] 15.4 Implement Notification API endpoints: list (paginated, filterable by event type/date), mark individual as read, mark all as read, unread count
     - _Requirements: 15.4, 15.7_
 
-  - [ ] 15.5 Implement frontend: Notification bell with unread count badge, notification dropdown, full notification history page with filters; integrate Laravel Echo client for real-time updates
+  - [x] 15.5 Implement frontend: Notification bell with unread count badge, notification dropdown, full notification history page with filters; integrate Laravel Echo client for real-time updates
     - _Requirements: 15.6, 15.7, 22.5_
 
 
 
-- [ ] 16. Reporting & Analytics
-  - [ ] 16.1 Implement `ReportingService`: role-specific KPI dashboard data (total PRs by status, active tenders, PO fulfillment rate, budget utilization %, pending approvals count, overdue deliveries count); procurement timeline report (avg cycle time PR→PO, filterable by dept/category/date)
+- [x] 16. Reporting & Analytics
+  - [x] 16.1 Implement `ReportingService`: role-specific KPI dashboard data (total PRs by status, active tenders, PO fulfillment rate, budget utilization %, pending approvals count, overdue deliveries count); procurement timeline report (avg cycle time PR→PO, filterable by dept/category/date)
     - Cache report data in Redis for 5 minutes; scope all data to requesting user's tenant and role permissions
     - _Requirements: 16.1, 16.2, 16.9_
 
-  - [ ] 16.2 Implement spending analytics report (expenditure by dept/category/supplier with month-over-month trends), supplier performance report, tender statistics report, financial summary report (invoiced/paid/outstanding/budget variance)
+  - [x] 16.2 Implement spending analytics report (expenditure by dept/category/supplier with month-over-month trends), supplier performance report, tender statistics report, financial summary report (invoiced/paid/outstanding/budget variance)
     - _Requirements: 16.3, 16.4, 16.5, 16.6_
 
-  - [ ] 16.3 Implement report export: synchronous PDF/Excel generation for datasets ≤10,000 rows (available within 30 seconds); async `GenerateReportJob` on `reports` queue for >10,000 rows with notification when ready
+  - [x] 16.3 Implement report export: synchronous PDF/Excel generation for datasets ≤10,000 rows (available within 30 seconds); async `GenerateReportJob` on `reports` queue for >10,000 rows with notification when ready
     - _Requirements: 16.7, 16.8_
 
-  - [ ] 16.4 Implement frontend: Role-specific dashboard page with Recharts animated charts (Framer Motion) and KPI widgets; report pages with date/dept/category/status/supplier filters and PDF/Excel export buttons
+  - [x] 16.4 Implement frontend: Role-specific dashboard page with Recharts animated charts (Framer Motion) and KPI widgets; report pages with date/dept/category/status/supplier filters and PDF/Excel export buttons
     - _Requirements: 16.1, 16.10, 22.1, 22.10_
 
 
 
-- [ ] 17. Audit Logging & Traceability
-  - [ ] 17.1 Implement `AuditService` with async `WriteAuditLogJob` on `default` queue (max 5-second write latency): capture user UUID/role/tenant_id, action type, entity type/UUID, before/after JSON diff, IP address, UTC timestamp, request ID; implement `AuditTrailMiddleware`
+- [x] 17. Audit Logging & Traceability
+  - [x] 17.1 Implement `AuditService` with async `WriteAuditLogJob` on `default` queue (max 5-second write latency): capture user UUID/role/tenant_id, action type, entity type/UUID, before/after JSON diff, IP address, UTC timestamp, request ID; implement `AuditTrailMiddleware`
     - `audit_logs` table is append-only — no UPDATE or DELETE operations permitted at any layer
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.9_
 
-  - [ ] 17.2 Implement Audit Log API endpoint (`GET /api/v1/audit-logs`) with search/filter by user/action type/entity type/date range/IP; Tenant_Admin scoped to own tenant; System_Admin can access all tenants; reject any PUT/DELETE on audit logs with HTTP 403
+  - [x] 17.2 Implement Audit Log API endpoint (`GET /api/v1/audit-logs`) with search/filter by user/action type/entity type/date range/IP; Tenant_Admin scoped to own tenant; System_Admin can access all tenants; reject any PUT/DELETE on audit logs with HTTP 403
     - _Requirements: 17.6, 17.7, 17.8_
 
-  - [ ] 17.3 Write property-based tests: Property 10 (audit log immutability — for any audit log record, PUT/DELETE returns HTTP 403 regardless of role; total record count is monotonically non-decreasing — 100 random create/read/attempt-delete sequences)
+  - [x] 17.3 Write property-based tests: Property 10 (audit log immutability — for any audit log record, PUT/DELETE returns HTTP 403 regardless of role; total record count is monotonically non-decreasing — 100 random create/read/attempt-delete sequences)
     - _Requirements: 17.5, 17.6, 21.1_
 
-  - [ ] 17.4 Implement frontend: Audit log viewer page with advanced filters (user, action type, entity, date range, IP), paginated results table, export to CSV
+  - [x] 17.4 Implement frontend: Audit log viewer page with advanced filters (user, action type, entity, date range, IP), paginated results table, export to CSV
     - _Requirements: 17.7, 22.6_
 
 
 
 - [ ] 18. File Management
-  - [ ] 18.1 Implement `FileManagementService`: validate MIME type against allowed list (PDF, DOCX, XLSX, PNG, JPG, JPEG), validate file size ≤10 MB, generate non-guessable storage key (UUID + SHA-256 hash), store in tenant-scoped path `{tenant_id}/{entity_type}/{uuid}.{ext}`, soft delete with audit log entry
+  - [x] 18.1 Implement `FileManagementService`: validate MIME type against allowed list (PDF, DOCX, XLSX, PNG, JPG, JPEG), validate file size ≤10 MB, generate non-guessable storage key (UUID + SHA-256 hash), store in tenant-scoped path `{tenant_id}/{entity_type}/{uuid}.{ext}`, soft delete with audit log entry
     - _Requirements: 23.1, 23.2, 23.3, 23.4, 23.6, 23.9_
 
-  - [ ] 18.2 Implement file download with tenant authorization check (requesting user must belong to same tenant as file owner); implement `ProcessSupplierDocumentScanJob` as virus scan integration point (async, rejects file if scan fails); configure S3-compatible storage backend via environment variables
+  - [x] 18.2 Implement file download with tenant authorization check (requesting user must belong to same tenant as file owner); implement `ProcessSupplierDocumentScanJob` as virus scan integration point (async, rejects file if scan fails); configure S3-compatible storage backend via environment variables
     - _Requirements: 23.5, 23.7, 23.8, 23.10_
 
 
 
-- [ ] 19. API Documentation, Caching & Performance
-  - [ ] 19.1 Implement OpenAPI 3.0 specification with Swagger UI at `/api/documentation`: document all endpoints with request schemas, response schemas, authentication requirements, and example payloads; include `X-Request-ID` header in all responses
+- [x] 19. API Documentation, Caching & Performance
+  - [x] 19.1 Implement OpenAPI 3.0 specification with Swagger UI at `/api/documentation`: document all endpoints with request schemas, response schemas, authentication requirements, and example payloads; include `X-Request-ID` header in all responses
     - _Requirements: 18.6, 18.7, 18.10_
 
-  - [ ] 19.2 Implement Redis caching for role permissions (300s TTL), tenant configuration (300s TTL), and budget summaries (300s TTL); implement immediate cache invalidation on role changes and budget updates; implement slow query logging for queries exceeding 1 second
+  - [x] 19.2 Implement Redis caching for role permissions (300s TTL), tenant configuration (300s TTL), and budget summaries (300s TTL); implement immediate cache invalidation on role changes and budget updates; implement slow query logging for queries exceeding 1 second
     - _Requirements: 24.3, 24.4, 24.10_
 
-  - [ ] 19.3 Implement health check endpoint (`GET /api/health`) returning database connection status, Redis connection status, and queue worker availability; return HTTP 200 when all healthy, HTTP 503 when degraded
+  - [x] 19.3 Implement health check endpoint (`GET /api/health`) returning database connection status, Redis connection status, and queue worker availability; return HTTP 200 when all healthy, HTTP 503 when degraded
     - _Requirements: 20.10_
 
 
 
-- [ ] 20. Frontend Polish & Tenant Management UI
-  - [ ] 20.1 Implement frontend: dark/light mode toggle with `localStorage` persistence under `pmp-theme` key; responsive layout rendering correctly from 320px to 2560px without horizontal scrolling; WCAG 2.1 Level AA compliance (keyboard navigation, color contrast, ARIA labels)
+- [x] 20. Frontend Polish & Tenant Management UI
+  - [x] 20.1 Implement frontend: dark/light mode toggle with `localStorage` persistence under `pmp-theme` key; responsive layout rendering correctly from 320px to 2560px without horizontal scrolling; WCAG 2.1 Level AA compliance (keyboard navigation, color contrast, ARIA labels)
     - _Requirements: 22.2, 22.3, 22.4_
 
-  - [ ] 20.2 Implement frontend: loading skeleton components for all data-fetching pages; React Error Boundary components wrapping each major page section with retry action; optimistic updates for status-change actions (approve, reject, mark-as-read)
+  - [x] 20.2 Implement frontend: loading skeleton components for all data-fetching pages; React Error Boundary components wrapping each major page section with retry action; optimistic updates for status-change actions (approve, reject, mark-as-read)
     - _Requirements: 22.5, 22.7_
 
-  - [ ] 20.3 Implement frontend: Tenant management pages for System_Admin (tenant list, register tenant form, suspend/reactivate tenant actions, tenant analytics dashboard)
+  - [x] 20.3 Implement frontend: Tenant management pages for System_Admin (tenant list, register tenant form, suspend/reactivate tenant actions, tenant analytics dashboard)
     - _Requirements: 1.6, 1.8_
 
-  - [ ] 20.4 Implement Flutter supplier portal: login screen, dashboard (active tenders, POs, invoice status), open tenders list, bid submission form, purchase orders list (accept/reject), invoice submission form, payment tracking screen, notifications screen
+  - [x] 20.4 Implement Flutter supplier portal: login screen, dashboard (active tenders, POs, invoice status), open tenders list, bid submission form, purchase orders list (accept/reject), invoice submission form, payment tracking screen, notifications screen
     - _Requirements: 22.8, 22.9_
 
-  - [ ] 20.5 Implement Flutter offline support: Hive local caching for dashboard/tender/PO data (24h TTL for lists, 1h for details), Connectivity Plus network detection, offline banner display, write operation queue with sync on reconnect
+  - [x] 20.5 Implement Flutter offline support: Hive local caching for dashboard/tender/PO data (24h TTL for lists, 1h for details), Connectivity Plus network detection, offline banner display, write operation queue with sync on reconnect
     - _Requirements: 22.9_
 
 
@@ -348,22 +348,22 @@ This plan converts the PMP design into incremental coding tasks for a Laravel 12
   - [ ] 21.1 Write property-based tests: Property 1 (tenant data isolation — for any two distinct tenants A and B, queries in context of B never return records belonging to A — 100 random entity types and record combinations across all 15 entity types)
     - _Requirements: 1.2, 1.4, 21.3_
 
-  - [ ] 21.2 Write property-based tests: Property 5 (JWT claims completeness — for any valid user/tenant/role combination, issued JWT always contains `user_id`, `tenant_id`, `role`, `exp`, `iat`, `jti` with correct values — 100 random user/role combinations)
+  - [~] 21.2 Write property-based tests: Property 5 (JWT claims completeness — for any valid user/tenant/role combination, issued JWT always contains `user_id`, `tenant_id`, `role`, `exp`, `iat`, `jti` with correct values — 100 random user/role combinations)
     - _Requirements: 2.1, 21.4_
 
-  - [ ] 21.3 Write property-based tests: Property 11 (API response envelope consistency — for any successful request, response contains `success:true`, `data`, `message`, `errors:null`, `meta`; for any validation failure, `success:false`, `errors` object with field arrays — 100 random valid and invalid requests per endpoint)
+  - [~] 21.3 Write property-based tests: Property 11 (API response envelope consistency — for any successful request, response contains `success:true`, `data`, `message`, `errors:null`, `meta`; for any validation failure, `success:false`, `errors` object with field arrays — 100 random valid and invalid requests per endpoint)
     - _Requirements: 18.2, 18.3, 21.2_
 
-  - [ ] 21.4 Write property-based tests: Property 12 (JSON serialization round-trip — for any entity, serializing to API response JSON and parsing back produces identical field values; UUIDs remain valid UUID v4; monetary values remain strings with exactly 2 decimal places; datetimes remain ISO 8601 — 100 random entities per type)
+  - [~] 21.4 Write property-based tests: Property 12 (JSON serialization round-trip — for any entity, serializing to API response JSON and parsing back produces identical field values; UUIDs remain valid UUID v4; monetary values remain strings with exactly 2 decimal places; datetimes remain ISO 8601 — 100 random entities per type)
     - _Requirements: 25.4, 25.5, 25.6, 21.9_
 
-  - [ ] 21.5 Write multi-tenant isolation feature tests: verify that authenticated users from Tenant A receive HTTP 404 (not 403) when attempting to read, update, or delete any resource belonging to Tenant B through every API endpoint
+  - [~] 21.5 Write multi-tenant isolation feature tests: verify that authenticated users from Tenant A receive HTTP 404 (not 403) when attempting to read, update, or delete any resource belonging to Tenant B through every API endpoint
     - _Requirements: 1.2, 1.4, 21.3_
 
-  - [ ] 21.6 Write authentication feature tests: successful login returns JWT with correct claims; wrong password increments counter; 5th failure locks account and sends email; expired JWT returns HTTP 401; password reset flow completes successfully; locked account cannot authenticate
+  - [~] 21.6 Write authentication feature tests: successful login returns JWT with correct claims; wrong password increments counter; 5th failure locks account and sends email; expired JWT returns HTTP 401; password reset flow completes successfully; locked account cannot authenticate
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 21.4_
 
-  - [ ] 21.7 Write end-to-end Playwright test simulating the full procurement lifecycle: Tenant_Admin creates dept + budget → Department_Staff creates and submits PR → Procurement_Officer approves PR and creates/publishes Tender → Supplier submits Bid → Committee_Member evaluates Bid → Procurement_Officer selects winner and issues PO → Store_Manager creates GRN → Supplier submits Invoice → Finance_Officer approves Invoice and processes Payment
+  - [~] 21.7 Write end-to-end Playwright test simulating the full procurement lifecycle: Tenant_Admin creates dept + budget → Department_Staff creates and submits PR → Procurement_Officer approves PR and creates/publishes Tender → Supplier submits Bid → Committee_Member evaluates Bid → Procurement_Officer selects winner and issues PO → Store_Manager creates GRN → Supplier submits Invoice → Finance_Officer approves Invoice and processes Payment
     - _Requirements: 21.7_
 
 

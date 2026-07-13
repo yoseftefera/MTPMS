@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-/// Domain entity representing an authenticated user.
+/// Domain entity representing an authenticated supplier user.
 class User extends Equatable {
   final String id;
   final String tenantId;
@@ -17,11 +17,12 @@ class User extends Equatable {
     required this.name,
     required this.email,
     required this.role,
-    required this.permissions,
+    this.permissions = const [],
     this.avatar,
     this.phone,
   });
 
   @override
-  List<Object?> get props => [id, tenantId, email, role];
+  List<Object?> get props =>
+      [id, tenantId, name, email, role, permissions, avatar, phone];
 }

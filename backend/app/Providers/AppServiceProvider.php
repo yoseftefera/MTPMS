@@ -50,12 +50,17 @@ class AppServiceProvider extends ServiceProvider
         // Prevent silently discarding attributes not in fillable
         Model::preventSilentlyDiscardingAttributes(! app()->isProduction());
 
-        // Log slow queries (> 1 second) as per design requirement
-        DB::whenQueryingForLongerThan(1000, function () {
-            Log::warning('Slow query detected', [
-                'query'    => DB::getQueryLog(),
-                'duration' => '> 1000ms',
-            ]);
+        // Slow query logging — log any query that takes more than 1000ms.
+        // Requirement 24.10
+        DB::listen(function (\Illuminate\Database\Events\QueryExecuted $query) {
+            if ($query->time > 1000) {
+                Log::channel('slow_queries')->warning('Slow query detected', [
+                    'sql'      => $query->sql,
+                    'bindings' => $query->bindings,
+                    'time_ms'  => $query->time,
+                    'connection' => $query->connectionName,
+                ]);
+            }
         });
 
         // ── Rate Limiters ────────────────────────────────────────────────────

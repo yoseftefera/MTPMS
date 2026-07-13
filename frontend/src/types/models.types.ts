@@ -347,7 +347,7 @@ export interface GoodsReceipt {
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────
 
-export type InvoiceStatus = 'submitted' | 'under_review' | 'approved' | 'rejected' | 'partially_paid' | 'paid';
+export type InvoiceStatus = 'pending_approval' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'partially_paid' | 'paid';
 
 export interface Invoice {
   id: string;
